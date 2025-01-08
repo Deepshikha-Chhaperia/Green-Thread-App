@@ -143,71 +143,48 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
 
 @st.cache_resource
 def load_models():
+    """Load and configure the Stable Diffusion model for CPU use"""
     model_id = "runwayml/stable-diffusion-v1-5"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     
     try:
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
-            revision="fp16" if torch.cuda.is_available() else None,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            torch_dtype=torch.float32,
+            safety_checker=None
         )
         
-        if device == "cpu":
-            pipe.enable_attention_slicing()
-            pipe.enable_sequential_cpu_offload()
+        pipe = pipe.to("cpu")
+        pipe.enable_attention_slicing(slice_size="max")
+        pipe.enable_vae_slicing()
+        st.session_state['inference_steps'] = 20
         
-        pipe = pipe.to(device)
         return pipe
+        
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
+    """Generate image with CPU optimized settings"""
     if pipe is None:
-        st.error("Model failed to load")
         return None
         
     try:
         def callback(step, timestep, latents):
-            progress = int((step / 20) * 100)
+            progress = int((step / st.session_state['inference_steps']) * 100)
             progress_bar.progress(progress)
         
         with torch.inference_mode():
             image = pipe(
                 prompt,
-                num_inference_steps=20,
+                num_inference_steps=st.session_state['inference_steps'],
                 guidance_scale=7.5,
                 callback=callback,
                 callback_steps=1
             ).images[0]
+            
         return image
-    except Exception as e:
-        st.error(f"Error generating image: {str(e)}")
-        return None
-
-def generate_ai_image(pipe, prompt, progress_bar):
-    if pipe is None:
-        st.error("Model not properly loaded")
-        return None
         
-    try:
-        def callback(step, timestep, latents):
-            progress = int((step / 20) * 100)
-            progress_bar.progress(progress)
-        
-        with torch.inference_mode():  # More efficient than torch.no_grad()
-            image = pipe(
-                prompt,
-                num_inference_steps=20,
-                guidance_scale=7.5,
-                callback=callback,
-                callback_steps=1
-            ).images[0]
-        return image
     except Exception as e:
-        st.error(f"Error generating image: {str(e)}")
-        st.error("Full error traceback:", exc_info=True)
         return None
     
 # Configure retry strategy
