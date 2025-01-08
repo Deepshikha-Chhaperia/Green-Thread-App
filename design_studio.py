@@ -150,56 +150,55 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
 
 @st.cache_resource
 def load_models():
-    """Load Stable Diffusion for CPU"""
+    """Load Stable Diffusion with optimized settings"""
     try:
         model_id = "runwayml/stable-diffusion-v1-5"
         
+        # Initialize model with minimal memory usage
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
             torch_dtype=torch.float32,
             safety_checker=None,
-            requires_safety_checking=False,
-            use_safetensors=True,
-            low_memory=True
+            requires_safety_checking=False
         )
         
-        # Move to CPU
+        # Move to CPU and enable memory optimizations
         pipe = pipe.to("cpu")
+        pipe.enable_attention_slicing()
+        pipe.enable_vae_tiling()
         
-        # Enable optimizations
-        pipe.enable_attention_slicing(slice_size=1)
-        pipe.enable_vae_slicing()
-        
-        # Set minimal steps
-        st.session_state['inference_steps'] = 20
+        # Set minimal memory inference steps
+        pipe.scheduler.num_inference_steps = 20
         
         return pipe
-        
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image using CPU"""
+    """Generate image with optimized memory usage"""
     if pipe is None:
         st.error("Model not properly initialized")
         return None
     
     try:
         with torch.no_grad():
-            # Set minimal parameters
+            # Optimized generation parameters
             generation_params = {
                 "prompt": prompt,
-                "num_inference_steps": st.session_state['inference_steps'],
-                "guidance_scale": 6.0,
-                "height": 256,  # Reduced size for faster generation
-                "width": 256
+                "num_inference_steps": 20,  # Reduced steps
+                "guidance_scale": 7.0,
+                "height": 512,  # Standard size
+                "width": 512,
+                "num_images_per_prompt": 1
             }
             
+            # Progress callback
             def callback(step, timestep, latents):
                 progress = int((step / generation_params["num_inference_steps"]) * 100)
                 progress_bar.progress(progress)
             
+            # Generate image with memory optimization
             image = pipe(
                 **generation_params,
                 callback=callback,
@@ -211,6 +210,17 @@ def generate_ai_image(pipe, prompt, progress_bar):
     except Exception as e:
         st.error(f"Error generating image: {str(e)}")
         return None
+
+# Initialize session state variables at startup
+def init_session_state():
+    if 'model_loaded' not in st.session_state:
+        st.session_state.model_loaded = False
+    if 'generated_design' not in st.session_state:
+        st.session_state.generated_design = None
+    if 'qr_code' not in st.session_state:
+        st.session_state.qr_code = None
+    if 'care_instructions' not in st.session_state:
+        st.session_state.care_instructions = None
     
 # Configure retry strategy
 retry_strategy = retry.Retry(
