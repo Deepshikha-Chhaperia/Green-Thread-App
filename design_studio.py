@@ -22,7 +22,6 @@ warnings.filterwarnings('ignore')
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-os.environ['FORCE_CPU'] = '1'
 
 st.set_page_config(
     page_title="AI Sustainable Fashion Design Studio",
@@ -151,14 +150,9 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
 
 @st.cache_resource
 def load_models():
-    """Load and configure Stable Diffusion for CPU-only use"""
+    """Load Stable Diffusion for CPU"""
     try:
-        # Force CPU settings
-        device = "cpu"
-        torch.set_num_threads(4)  # Set reasonable CPU thread count
-        
-        # Use smaller model
-        model_id = "CompVis/stable-diffusion-v1-4"
+        model_id = "runwayml/stable-diffusion-v1-5"
         
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
@@ -166,41 +160,40 @@ def load_models():
             safety_checker=None,
             requires_safety_checking=False,
             use_safetensors=True,
-            low_memory=True,
-            device_map="auto"
+            low_memory=True
         )
         
-        # Force CPU explicitly
+        # Move to CPU
         pipe = pipe.to("cpu")
         
-        # Enable memory optimizations
+        # Enable optimizations
         pipe.enable_attention_slicing(slice_size=1)
         pipe.enable_vae_slicing()
         
-        # Minimal inference steps
+        # Set minimal steps
         st.session_state['inference_steps'] = 20
         
         return pipe
         
     except Exception as e:
-        st.error(f"Image generation error: {str(e)}")
+        st.error(f"Error loading model: {str(e)}")
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image using CPU only"""
+    """Generate image using CPU"""
     if pipe is None:
         st.error("Model not properly initialized")
         return None
     
     try:
         with torch.no_grad():
+            # Set minimal parameters
             generation_params = {
                 "prompt": prompt,
                 "num_inference_steps": st.session_state['inference_steps'],
                 "guidance_scale": 6.0,
-                "height": 384,
-                "width": 384,
-                "num_images_per_prompt": 1
+                "height": 256,  # Reduced size for faster generation
+                "width": 256
             }
             
             def callback(step, timestep, latents):
@@ -216,7 +209,7 @@ def generate_ai_image(pipe, prompt, progress_bar):
             return image
             
     except Exception as e:
-        st.error(f"Image generation error: {str(e)}")
+        st.error(f"Error generating image: {str(e)}")
         return None
     
 # Configure retry strategy
