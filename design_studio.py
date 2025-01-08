@@ -19,11 +19,19 @@ from http.server import BaseHTTPRequestHandler
 import warnings
 warnings.filterwarnings('ignore')
 
+import os
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
 st.set_page_config(
     page_title="AI Sustainable Fashion Design Studio",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Add these settings after st.set_page_config
+st.cache_data.clear()
+st.cache_resource.clear()
 
 # Load environment variables
 load_dotenv()
@@ -142,31 +150,30 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
 
 @st.cache_resource
 def load_models():
-    """Load and configure the Stable Diffusion model for CPU-only environment"""
+    """Load and configure a lightweight model for CPU deployment"""
     try:
-        # Force CPU configuration
         device = "cpu"
-        model_id = "CompVis/stable-diffusion-v1-4"  # Smaller model for CPU
+        # Use a much smaller model for faster CPU inference
+        model_id = "runwayml/stable-diffusion-v1-5"
         
-        # Initialize pipeline with CPU-specific settings
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
-            torch_dtype=torch.float32,  # Use float32 for CPU
+            torch_dtype=torch.float32,
             safety_checker=None,
             requires_safety_checking=False,
             use_safetensors=True,
             low_memory=True
         )
         
-        # Move to CPU explicitly
         pipe = pipe.to(device)
         
-        # Enable all CPU optimizations
+        # Maximum optimizations for CPU
         pipe.enable_attention_slicing(slice_size=1)
         pipe.enable_vae_slicing()
+        pipe.enable_model_cpu_offload()
         
-        # Reduce inference steps for faster generation
-        st.session_state['inference_steps'] = 15
+        # Reduce inference steps significantly
+        st.session_state['inference_steps'] = 10
         
         return pipe
         
@@ -175,32 +182,33 @@ def load_models():
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image with CPU-optimized settings"""
+    """Generate image with optimized CPU settings"""
     if pipe is None:
         st.error("Model not properly initialized")
         return None
         
     try:
-        # Show warning about processing time
-        st.warning("Image generation on CPU may take several minutes. Please be patient.")
-        
-        # Set generation parameters
+        # Set minimal generation parameters for speed
         generation_params = {
             "prompt": prompt,
             "num_inference_steps": st.session_state['inference_steps'],
-            "guidance_scale": 7.0,
-            "height": 512,
-            "width": 512,
-            "num_images_per_prompt": 1,
+            "guidance_scale": 6.0,  # Reduced for speed
+            "height": 384,  # Reduced size for faster generation
+            "width": 384,
+            "num_images_per_prompt": 1
         }
         
-        # Progress callback
         def callback(step, timestep, latents):
             progress = int((step / generation_params["num_inference_steps"]) * 100)
             progress_bar.progress(progress)
         
-        # Generate image
         with torch.no_grad():
+            pipe.to("cpu")  # Ensure we're on CPU
+            torch.cuda.empty_cache()  # Clear any GPU memory
+            
+            # Set torch to use maximum CPU threads
+            torch.set_num_threads(max(4, torch.get_num_threads()))
+            
             image = pipe(
                 **generation_params,
                 callback=callback,
