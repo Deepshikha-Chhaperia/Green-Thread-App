@@ -145,33 +145,71 @@ import torch
 import warnings
 from diffusers import StableDiffusionPipeline
 
-@st.cache_resource #streamlit decorator,caching makes resources immediately available for future
+@st.cache_resource
 def load_models():
-    model_id = "runwayml/stable-diffusion-v1-5" 
-#version 1.5, stablediffusion model is hosted on runwayML(platform to provide services and tools)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    """Load and configure the Stable Diffusion model for CPU use with error handling"""
+    model_id = "runwayml/stable-diffusion-v1-5"
     
-    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float32)
-    pipe = pipe.to(device) #moves the model to the chosen device cpu or gpu
-    
-    return pipe
-def generate_ai_image(pipe, prompt, progress_bar):
     try:
-        def callback(step, timestep, latents):
-            progress = int((step / 20) * 100)
-            progress_bar.progress(progress)
+        # Force CPU device and float32 precision
+        device = "cpu"
+        torch_dtype = torch.float32
         
-        with torch.no_grad(): #disabling gradient (change in output due to input), save momemory
-            image = pipe(
-                prompt, 
-                num_inference_steps=20, 
-                guidance_scale=7.5, #strongly adhere to the given guidance (prompt)
-                callback=callback, #takes info from each inference step and performs logging
-                callback_steps=1
-            ).images[0]
-        return image
+        # Disable warnings during model loading
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            
+            # Initialize pipeline with specific configurations
+            pipe = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch_dtype,
+                safety_checker=None,
+                requires_safety_checking=False
+            )
+            
+            # Move to CPU and optimize
+            pipe = pipe.to(device)
+            pipe.enable_attention_slicing(slice_size="max")
+            pipe.enable_vae_slicing()
+            
+            # Set default inference steps
+            st.session_state['inference_steps'] = 20
+            
+            return pipe
+            
     except Exception as e:
-        st.error(f"Error generating image: {str(e)}")
+        st.error(f"Model loading error: {str(e)}")
+        return None
+
+def generate_ai_image(pipe, prompt, progress_bar):
+    """Generate image with enhanced error handling"""
+    if pipe is None:
+        st.error("Model not properly initialized")
+        return None
+        
+    try:
+        # Set torch to inference mode
+        with torch.inference_mode():
+            # Define callback for progress
+            def callback(step, timestep, latents):
+                progress = int((step / st.session_state['inference_steps']) * 100)
+                progress_bar.progress(progress)
+            
+            # Generate image with specific settings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore")
+                image = pipe(
+                    prompt,
+                    num_inference_steps=st.session_state['inference_steps'],
+                    guidance_scale=7.5,
+                    callback=callback,
+                    callback_steps=1
+                ).images[0]
+            
+            return image
+            
+    except Exception as e:
+        st.error(f"Image generation error: {str(e)}")
         return None
     
 # Configure retry strategy
