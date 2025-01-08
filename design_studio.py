@@ -141,50 +141,37 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
         conn.close()
 
 
-@st.cache_resource
-def load_models():
-    """Load and configure the Stable Diffusion model for CPU use"""
-    model_id = "runwayml/stable-diffusion-v1-5"
-    
-    try:
-        pipe = StableDiffusionPipeline.from_pretrained(
-            model_id,
-            torch_dtype=torch.float32,
-            safety_checker=None
-        )
-        
-        pipe = pipe.to("cpu")
-        pipe.enable_attention_slicing(slice_size="max")
-        pipe.enable_vae_slicing()
-        st.session_state['inference_steps'] = 20
-        
-        return pipe
-        
-    except Exception as e:
-        return None
+import torch
+import warnings
+from diffusers import StableDiffusionPipeline
 
+@st.cache_resource #streamlit decorator,caching makes resources immediately available for future
+def load_models():
+    model_id = "runwayml/stable-diffusion-v1-5" 
+#version 1.5, stablediffusion model is hosted on runwayML(platform to provide services and tools)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float32)
+    pipe = pipe.to(device) #moves the model to the chosen device cpu or gpu
+    
+    return pipe
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image with CPU optimized settings"""
-    if pipe is None:
-        return None
-        
     try:
         def callback(step, timestep, latents):
-            progress = int((step / st.session_state['inference_steps']) * 100)
+            progress = int((step / 20) * 100)
             progress_bar.progress(progress)
         
-        with torch.inference_mode():
+        with torch.no_grad(): #disabling gradient (change in output due to input), save momemory
             image = pipe(
-                prompt,
-                num_inference_steps=st.session_state['inference_steps'],
-                guidance_scale=7.5,
-                callback=callback,
+                prompt, 
+                num_inference_steps=20, 
+                guidance_scale=7.5, #strongly adhere to the given guidance (prompt)
+                callback=callback, #takes info from each inference step and performs logging
                 callback_steps=1
             ).images[0]
-            
         return image
-        
     except Exception as e:
+        st.error(f"Error generating image: {str(e)}")
         return None
     
 # Configure retry strategy
@@ -882,7 +869,7 @@ def display_design_studio():
         if st.session_state.generated_design:
             st.image(st.session_state.generated_design,
                     caption=f"Sustainable {st.session_state.current_base_color} {st.session_state.current_clothing_type} Design",
-                    use_column_width=True)
+                    use_container_width=True)
 
             # Add minimal spacing before assessment
             st.markdown("""
