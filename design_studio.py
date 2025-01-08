@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler
 import warnings
 warnings.filterwarnings('ignore')
 
+
 st.set_page_config(
     page_title="AI Sustainable Fashion Design Studio",
     layout="wide",
@@ -140,74 +141,86 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
     finally:
         conn.close()
 
-
-import torch
-import warnings
-from diffusers import StableDiffusionPipeline
-
 @st.cache_resource
 def load_models():
-    """Load and configure the Stable Diffusion model for CPU use with error handling"""
-    model_id = "runwayml/stable-diffusion-v1-5"
-    
+    """Load and configure the Stable Diffusion model with cloud-friendly settings"""
     try:
-        # Force CPU device and float32 precision
-        device = "cpu"
-        torch_dtype = torch.float32
+        # Check if we're running on Streamlit Cloud
+        is_cloud = os.getenv('STREAMLIT_SERVER_HEADLESS', '') == 'true'
         
-        # Disable warnings during model loading
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            
-            # Initialize pipeline with specific configurations
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model_id,
-                torch_dtype=torch_dtype,
-                safety_checker=None,
-                requires_safety_checking=False
-            )
-            
-            # Move to CPU and optimize
-            pipe = pipe.to(device)
-            pipe.enable_attention_slicing(slice_size="max")
-            pipe.enable_vae_slicing()
-            
-            # Set default inference steps
-            st.session_state['inference_steps'] = 20
-            
-            return pipe
-            
+        if is_cloud:
+            st.warning("Running on Streamlit Cloud - switching to lightweight configuration")
+            # Use CPU-optimized settings for cloud
+            device = "cpu"
+            torch_dtype = torch.float32
+            model_id = "CompVis/stable-diffusion-v1-4"  # Smaller model
+        else:
+            # Local development settings
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            torch_dtype = torch.float16 if device == "cuda" else torch.float32
+            model_id = "runwayml/stable-diffusion-v1-5"
+
+        # Initialize pipeline with memory-efficient settings
+        pipe = StableDiffusionPipeline.from_pretrained(
+            model_id,
+            torch_dtype=torch_dtype,
+            safety_checker=None,
+            requires_safety_checking=False,
+            use_safetensors=True,
+            low_memory=True
+        )
+        
+        # Memory optimization
+        pipe.enable_attention_slicing(slice_size=1)
+        pipe.enable_sequential_cpu_offload()
+        pipe.enable_vae_slicing()
+        
+        # Reduce default inference steps for cloud
+        st.session_state['inference_steps'] = 20 if not is_cloud else 15
+        
+        return pipe
+        
     except Exception as e:
         st.error(f"Model loading error: {str(e)}")
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image with enhanced error handling"""
+    """Generate image with cloud-friendly settings and better error handling"""
     if pipe is None:
         st.error("Model not properly initialized")
         return None
         
     try:
-        # Set torch to inference mode
-        with torch.inference_mode():
-            # Define callback for progress
+        # Set memory-efficient generation parameters
+        with torch.inference_mode(), torch.cuda.amp.autocast(enabled=False):
+            generation_params = {
+                "prompt": prompt,
+                "num_inference_steps": st.session_state['inference_steps'],
+                "guidance_scale": 7.0,  # Reduced from 7.5
+                "height": 512,  # Standard size
+                "width": 512,
+                "num_images_per_prompt": 1,
+            }
+            
+            # Progress callback
             def callback(step, timestep, latents):
-                progress = int((step / st.session_state['inference_steps']) * 100)
+                progress = int((step / generation_params["num_inference_steps"]) * 100)
                 progress_bar.progress(progress)
             
-            # Generate image with specific settings
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore")
+            # Generate with memory optimization
+            with torch.no_grad():
                 image = pipe(
-                    prompt,
-                    num_inference_steps=st.session_state['inference_steps'],
-                    guidance_scale=7.5,
+                    **generation_params,
                     callback=callback,
                     callback_steps=1
                 ).images[0]
             
             return image
             
+    except RuntimeError as e:
+        if "out of memory" in str(e):
+            st.error("Out of memory error. Try again with a simpler prompt or contact support.")
+            return None
     except Exception as e:
         st.error(f"Image generation error: {str(e)}")
         return None
