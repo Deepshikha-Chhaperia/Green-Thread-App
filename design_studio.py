@@ -20,8 +20,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+os.environ['FORCE_CPU'] = '1'
 
 st.set_page_config(
     page_title="AI Sustainable Fashion Design Studio",
@@ -150,11 +151,14 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
 
 @st.cache_resource
 def load_models():
-    """Load and configure a lightweight model for CPU deployment"""
+    """Load and configure Stable Diffusion for CPU-only use"""
     try:
+        # Force CPU settings
         device = "cpu"
-        # Use a much smaller model for faster CPU inference
-        model_id = "runwayml/stable-diffusion-v1-5"
+        torch.set_num_threads(4)  # Set reasonable CPU thread count
+        
+        # Use smaller model
+        model_id = "CompVis/stable-diffusion-v1-4"
         
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
@@ -162,60 +166,54 @@ def load_models():
             safety_checker=None,
             requires_safety_checking=False,
             use_safetensors=True,
-            low_memory=True
+            low_memory=True,
+            device_map="auto"
         )
         
-        pipe = pipe.to(device)
+        # Force CPU explicitly
+        pipe = pipe.to("cpu")
         
-        # Maximum optimizations for CPU
+        # Enable memory optimizations
         pipe.enable_attention_slicing(slice_size=1)
         pipe.enable_vae_slicing()
-        pipe.enable_model_cpu_offload()
         
-        # Reduce inference steps significantly
+        # Minimal inference steps
         st.session_state['inference_steps'] = 20
         
         return pipe
         
     except Exception as e:
-        st.error(f"Model loading error: {str(e)}")
+        st.error(f"Image generation error: {str(e)}")
         return None
 
 def generate_ai_image(pipe, prompt, progress_bar):
-    """Generate image with optimized CPU settings"""
+    """Generate image using CPU only"""
     if pipe is None:
         st.error("Model not properly initialized")
         return None
-        
+    
     try:
-        # Set minimal generation parameters for speed
-        generation_params = {
-            "prompt": prompt,
-            "num_inference_steps": st.session_state['inference_steps'],
-            "guidance_scale": 6.0,  # Reduced for speed
-            "height": 384,  # Reduced size for faster generation
-            "width": 384,
-            "num_images_per_prompt": 1
-        }
-        
-        def callback(step, timestep, latents):
-            progress = int((step / generation_params["num_inference_steps"]) * 100)
-            progress_bar.progress(progress)
-        
         with torch.no_grad():
-            pipe.to("cpu")  # Ensure we're on CPU
-            torch.cuda.empty_cache()  # Clear any GPU memory
+            generation_params = {
+                "prompt": prompt,
+                "num_inference_steps": st.session_state['inference_steps'],
+                "guidance_scale": 6.0,
+                "height": 384,
+                "width": 384,
+                "num_images_per_prompt": 1
+            }
             
-            # Set torch to use maximum CPU threads
-            torch.set_num_threads(max(4, torch.get_num_threads()))
+            def callback(step, timestep, latents):
+                progress = int((step / generation_params["num_inference_steps"]) * 100)
+                progress_bar.progress(progress)
             
             image = pipe(
                 **generation_params,
                 callback=callback,
                 callback_steps=1
             ).images[0]
-        
-        return image
+            
+            return image
             
     except Exception as e:
         st.error(f"Image generation error: {str(e)}")
