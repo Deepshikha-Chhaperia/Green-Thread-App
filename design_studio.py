@@ -43,9 +43,14 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Database setup
 def get_db_connection():
-    conn = sqlite3.connect('greenthreads.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Get database connection with error handling"""
+    try:
+        conn = sqlite3.connect('greenthreads.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+    except sqlite3.Error as e:
+        st.error(f"Database connection error: {str(e)}")
+        return None
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -81,8 +86,10 @@ class handler(BaseHTTPRequestHandler):
             conn.close()
 
 def create_table():
+    """Create database table with all required columns"""
     conn = get_db_connection()
-    conn.execute('''CREATE TABLE IF NOT EXISTS designs
+    conn.execute('''DROP TABLE IF EXISTS designs''')  # Reset table to ensure correct schema
+    conn.execute('''CREATE TABLE designs
                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
                     style TEXT,
@@ -97,50 +104,52 @@ def create_table():
                     sustainability_score INTEGER,
                     qr_code_id TEXT UNIQUE,
                     care_instructions TEXT,
-                    timestamp DATETIME)''')
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
     conn.close()
 
 def save_design_to_db(user_id, style, materials, clothing_type, production_method, packaging, 
                      production_location, shipping_method, base_color, custom_design, sustainability_score):
-    """Save design to database and generate QR code with verification"""
+    """Save design with improved error handling and data validation"""
     conn = get_db_connection()
-    cursor = conn.cursor() #object to interact with the database
+    cursor = conn.cursor()
     
     try:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Convert materials list to string if necessary
+        materials_str = ", ".join(materials) if isinstance(materials, list) else materials
+        
+        # Generate QR code and care instructions first
+        qr_code_id = str(uuid.uuid4())
+        care_instructions = generate_care_instructions(materials, clothing_type, style)
+        
+        # Insert design data
         cursor.execute("""
-        INSERT INTO designs (user_id, style, materials, clothing_type, production_method, 
-                           packaging, production_location, shipping_method, base_color, 
-                           custom_design, sustainability_score, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, style, ", ".join(materials) if isinstance(materials, list) else materials,
-              clothing_type, production_method, packaging, production_location,
-              shipping_method, base_color, custom_design, sustainability_score, timestamp))
-        
-        conn.commit() #saving the changes to the database
-        design_id = cursor.lastrowid #design id inserted to the design
-        
-        # Generate QR code with error handling
-        qr_image_bytes, care_instructions = generate_qr_code(
-            design_id, 
-            materials, 
-            clothing_type, 
-            style
-        )
-        
-        if qr_image_bytes is None or care_instructions is None:
-            raise ValueError("Failed to generate QR code or care instructions")
-            
-        # Update database with QR code and care instructions
-        cursor.execute("""
-        UPDATE designs 
-        SET qr_code_id = ?, care_instructions = ?
-        WHERE id = ?
-        """, (str(uuid.uuid4()), care_instructions, design_id))
+            INSERT INTO designs (
+                user_id, style, materials, clothing_type, production_method, 
+                packaging, production_location, shipping_method, base_color, 
+                custom_design, sustainability_score, qr_code_id, care_instructions
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, style, materials_str, clothing_type, production_method,
+            packaging, production_location, shipping_method, base_color,
+            custom_design, sustainability_score, qr_code_id, care_instructions
+        ))
         
         conn.commit()
+        design_id = cursor.lastrowid
+        
+        # Generate QR code image
+        qr_image_bytes = generate_qr_code_image(qr_code_id, design_id, materials, clothing_type, style)
+        
+        if qr_image_bytes is None:
+            raise ValueError("Failed to generate QR code image")
+            
         return design_id, qr_image_bytes, care_instructions
         
+    except sqlite3.Error as e:
+        st.error(f"Database error: {str(e)}")
+        conn.rollback()
+        return None, None, None
     except Exception as e:
         st.error(f"Error saving design: {str(e)}")
         conn.rollback()
@@ -242,6 +251,41 @@ def generate_content_with_retry(model, prompt):
     except exceptions.GoogleAPICallError as e:
         st.warning(f"API call failed: {str(e)}. Retrying...")
         raise
+
+def generate_qr_code_image(qr_code_id, design_id, materials, clothing_type, style):
+    """Generate QR code image with improved error handling"""
+    try:
+        # Create QR code data
+        qr_data = {
+            "id": qr_code_id,
+            "design_id": design_id,
+            "verify_url": f"https://{os.getenv('VERCEL_DOMAIN', 'localhost:3000')}/api/verify/{qr_code_id}"
+        }
+        
+        # Create QR code with optimal settings
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        
+        # Add data and generate QR code
+        qr.add_data(json.dumps(qr_data))
+        qr.make(fit=True)
+        
+        # Create QR code image
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes
+        buffered = BytesIO()
+        qr_image.save(buffered, format="PNG")
+        return buffered.getvalue()
+        
+    except Exception as e:
+        st.error(f"Error generating QR code: {str(e)}")
+        return None
+
 
 def generate_care_instructions(materials, clothing_type, style):
     model = genai.GenerativeModel('gemini-pro')
