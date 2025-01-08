@@ -173,7 +173,7 @@ def load_models():
         pipe.enable_model_cpu_offload()
         
         # Reduce inference steps significantly
-        st.session_state['inference_steps'] = 10
+        st.session_state['inference_steps'] = 20
         
         return pipe
         
