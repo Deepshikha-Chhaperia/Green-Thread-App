@@ -1,33 +1,81 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.express as px 
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import sqlite3
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
+from queue import Queue
+from contextlib import contextmanager
 
 # Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Database connection
+# Database configuration
+DB_NAME = 'greenthreads.db'
+connection_pool = Queue(maxsize=5)
+
+@contextmanager
 def get_db_connection():
-    return sqlite3.connect('greenthreads.db', check_same_thread=False)
+    """Get a database connection from the pool"""
+    try:
+        connection = connection_pool.get(block=False)
+    except:
+        connection = sqlite3.connect(DB_NAME)
+    try:
+        yield connection
+    finally:
+        try:
+            connection_pool.put(connection)
+        except:
+            connection.close()
 
-def fetch_designs_from_db(conn):
-    query = """
-    SELECT style, materials, clothing_type, production_method, packaging,
-           shipping_method, base_color, sustainability_score, timestamp
-    FROM designs
-    """
-    df = pd.read_sql_query(query, conn)
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce')
-    return df
+def init_db():
+    """Initialize database tables"""
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        # Create users table
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
+        
+        # Create designs table
+        c.execute('''CREATE TABLE IF NOT EXISTS designs
+                     (id INTEGER PRIMARY KEY, 
+                      user_id INTEGER,
+                      style TEXT,
+                      materials TEXT,
+                      clothing_type TEXT,
+                      custom_design TEXT,
+                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                      recycling_instructions TEXT,
+                      production_method TEXT,
+                      packaging TEXT,
+                      shipping_method TEXT,
+                      base_color TEXT,
+                      sustainability_score REAL)''')
+        conn.commit()
 
+def fetch_designs_from_db():
+    """Fetch designs data from database"""
+    try:
+        with get_db_connection() as conn:
+            query = """
+            SELECT style, materials, clothing_type, production_method, packaging,
+                   shipping_method, base_color, sustainability_score, timestamp
+            FROM designs
+            """
+            df = pd.read_sql_query(query, conn)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce')
+            return df
+    except Exception as e:
+        st.error(f"Error fetching data: {str(e)}")
+        return pd.DataFrame()
+    
 def estimate_environmental_impact(df):
     # Calculate impact based on sustainability score and number of designs
     total_score = df['sustainability_score'].sum()
@@ -184,11 +232,37 @@ def filter_data_by_time_range(df, time_range):
     
     return df[df['timestamp'].dt.date >= start_date]
 
+def create_sustainability_score_chart(df):
+    """Create scatter plot of sustainability scores"""
+    fig = px.scatter(
+        df,
+        x='timestamp',
+        y='sustainability_score',
+        color='clothing_type',
+        size='sustainability_score',
+        hover_data=['style', 'materials', 'production_method'],
+        title='Sustainability Scores Over Time'
+    )
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Sustainability Score",
+        yaxis_range=[0, 100],
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
+    return fig
+
 def generate_sustainability_tips():
-    prompt = f"""Generate 5 actionable tips for promoting sustainable fashion, focusing on eco-friendly materials, ethical production, reducing waste, and encouraging conscious consumer choices."""
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content(prompt)
-    return response.text
+    """Generate sustainability tips using Gemini AI"""
+    try:
+        prompt = """Generate 5 actionable tips for promoting sustainable fashion,
+                   focusing on eco-friendly materials, ethical production,
+                   reducing waste, and conscious consumer choices."""
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return "Unable to generate tips at the moment. Please try again later."
 
 def display_sustainability_dashboard(conn):
     # Custom CSS
@@ -432,78 +506,69 @@ def display_sustainability_dashboard(conn):
                 
     """, unsafe_allow_html=True)
 
-    st.markdown('<h1>SUSTAINABILITY <span> DASHBOARD </span></h1>', unsafe_allow_html=True)
+    st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
     st.markdown("Empowering sustainable fashion choices for a greener future!")
-
-    conn = get_db_connection()
-    df = fetch_designs_from_db(conn)
-
-    if df.empty:
-        st.info("No designs have been created yet. Start creating sustainable designs to see the impact!")
-        return
     
-    # Display total number of designs
-    st.markdown(f"**Total Designs Created: {len(df)}**")
-    
-    # Dashboard controls
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        available_ranges = get_available_time_ranges(df)
-        time_range = st.selectbox("Select Time Range", available_ranges)
-
-    # Filter data based on selected time range
-    filtered_df = filter_data_by_time_range(df, time_range)
-
-    # Estimate environmental impact
-    impact = estimate_environmental_impact(filtered_df)
-
-    # Display impact metrics
-    st.header("Our Collective Impact")
-    st.markdown("*The following impact data is estimated based on the sustainability scores of the designs and the number of designs created.*")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f'<div class="metric-card"><p class="metric-value">{impact["water_usage_reduction"]:,.0f} L</p><p class="metric-label">Water Saved</p></div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f'<div class="metric-card"><p class="metric-value">{impact["co2_emissions_reduction"]:,.0f} kg</p><p class="metric-label">CO2 Reduced</p></div>', unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f'<div class="metric-card"><p class="metric-value">{impact["waste_reduction"]:,.0f} kg</p><p class="metric-label">Waste Reduction</p></div>', unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f'<div class="metric-card"><p class="metric-value">{impact["energy_savings"]:,.0f} kWh</p><p class="metric-label">Energy Saved</p></div>', unsafe_allow_html=True)
-    st.markdown("---")
-
-    # Sustainability Score Over Time
-    st.plotly_chart(create_sustainability_score_chart(filtered_df), use_container_width=True)
-
-    # Materials and Production Methods
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(create_materials_chart(filtered_df), use_container_width=True)
-    with col2:
-        st.plotly_chart(create_production_method_chart(filtered_df), use_container_width=True)
-
-    # New chart: Sustainability Trend
-    st.plotly_chart(create_sustainability_trend_chart(filtered_df), use_container_width=True)
-
-    # Sustainable Design Leaderboard
-    st.header("Sustainable Design Leaderboard")
-    top_designs = filtered_df.nlargest(5, 'sustainability_score')
-    for i, design in top_designs.iterrows():
-        st.markdown(f"""
-        **{design['style']} {design['clothing_type']}**
-        - Sustainability Score: {design['sustainability_score']:.1f}/100
-        - Materials: {design['materials']}
-        - Production Method: {design['production_method']}
-        - Packaging: {design['packaging']}
-        """)
-
-    # Display Sustainability Tips
-    tips = generate_sustainability_tips()
-    st.write(tips)
-    conn.close()
+    try:
+        # Initialize database if needed
+        init_db()
+        
+        # Fetch and process data
+        df = fetch_designs_from_db()
+        if df.empty:
+            st.info("No designs available. Start creating sustainable designs to see the impact!")
+            return
+            
+        # Display total designs
+        st.markdown(f"**Total Designs Created: {len(df)}**")
+        
+        # Time range selector
+        time_ranges = get_available_time_ranges(df)
+        time_range = st.selectbox("Select Time Range", time_ranges)
+        filtered_df = filter_data_by_time_range(df, time_range)
+        
+        # Environmental impact metrics
+        impact = estimate_environmental_impact(filtered_df)
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Water Saved", f"{impact['water_usage_reduction']:,.0f} L")
+        with col2:
+            st.metric("CO2 Reduced", f"{impact['co2_emissions_reduction']:,.0f} kg")
+        with col3:
+            st.metric("Waste Reduced", f"{impact['waste_reduction']:,.0f} kg")
+        with col4:
+            st.metric("Energy Saved", f"{impact['energy_savings']:,.0f} kWh")
+            
+        # Charts
+        st.plotly_chart(create_sustainability_score_chart(filtered_df), use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(create_materials_chart(filtered_df), use_container_width=True)
+        with col2:
+            st.plotly_chart(create_production_method_chart(filtered_df), use_container_width=True)
+            
+        st.plotly_chart(create_sustainability_trend_chart(filtered_df), use_container_width=True)
+        
+        # Leaderboard
+        st.header("Top Sustainable Designs")
+        top_designs = filtered_df.nlargest(5, 'sustainability_score')
+        for _, design in top_designs.iterrows():
+            st.markdown(f"""
+                **{design['style']} {design['clothing_type']}**
+                - Score: {design['sustainability_score']:.1f}/100
+                - Materials: {design['materials']}
+                - Production: {design['production_method']}
+            """)
+            
+        # Sustainability Tips
+        st.header("Sustainable Fashion Tips")
+        tips = generate_sustainability_tips()
+        st.write(tips)
+        
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    display_sustainability_dashboard(get_db_connection())
+    display_sustainability_dashboard()
