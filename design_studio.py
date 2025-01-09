@@ -41,7 +41,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Database setup
 def get_db_connection():
-    """Get database connection with error handling"""
     try:
         conn = sqlite3.connect('greenthreads.db')
         conn.row_factory = sqlite3.Row
@@ -51,68 +50,58 @@ def get_db_connection():
         return None
 
 def create_table():
-    """Create database table with all required fields"""
     conn = get_db_connection()
-    conn.execute('''DROP TABLE IF EXISTS designs''')
-    conn.execute('''CREATE TABLE designs
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT,
-                    style TEXT,
-                    materials TEXT,
-                    clothing_type TEXT,
-                    production_method TEXT,
-                    packaging TEXT,
-                    production_location TEXT,
-                    shipping_method TEXT,
-                    base_color TEXT,
-                    custom_design TEXT,
-                    sustainability_score INTEGER,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
+    if conn:
+        try:
+            conn.execute('''CREATE TABLE IF NOT EXISTS designs
+                        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT,
+                        style TEXT,
+                        materials TEXT,
+                        clothing_type TEXT,
+                        production_method TEXT,
+                        packaging TEXT,
+                        production_location TEXT,
+                        shipping_method TEXT,
+                        base_color TEXT,
+                        custom_design TEXT,
+                        sustainability_score INTEGER,
+                        design_image BLOB,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+            conn.commit()
+        except sqlite3.Error as e:
+            st.error(f"Error creating table: {str(e)}")
+        finally:
+            conn.close()
 
 def save_design_to_db(user_id, style, materials, clothing_type, production_method, packaging, 
                      production_location, shipping_method, base_color, custom_design, sustainability_score):
-    """
-    Save design data to database with comprehensive error handling and logging
-    """
     conn = get_db_connection()
     if not conn:
-        print("Database connection failed")
         return None
         
     try:
-        # Data validation
-        if not all([style, materials, clothing_type, production_method, packaging, 
-                   production_location, shipping_method, base_color]):
-            raise ValueError("Missing required fields")
-            
-        # Convert materials list to string if necessary
         materials_str = ", ".join(materials) if isinstance(materials, list) else materials
+        design_image = st.session_state.generated_design if 'generated_design' in st.session_state else None
         
-        # Validate sustainability score
-        sustainability_score = int(sustainability_score) if sustainability_score is not None else 0
-        
-        # Insert into database with all fields
         cursor = conn.cursor()
         insert_query = """
             INSERT INTO designs (
                 user_id, style, materials, clothing_type, production_method, 
                 packaging, production_location, shipping_method, base_color, 
-                custom_design, sustainability_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                custom_design, sustainability_score, design_image
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         cursor.execute(insert_query, (
             user_id, style, materials_str, clothing_type, production_method,
             packaging, production_location, shipping_method, base_color,
-            custom_design, sustainability_score
+            custom_design, sustainability_score, design_image
         ))
         
         conn.commit()
         inserted_id = cursor.lastrowid
         
-        # Verify insertion
         cursor.execute("SELECT * FROM designs WHERE id = ?", (inserted_id,))
         verification = cursor.fetchone()
         
