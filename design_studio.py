@@ -51,9 +51,9 @@ def get_db_connection():
         return None
 
 def create_table():
-    """Create database table with all required columns"""
+    """Create database table with all required fields"""
     conn = get_db_connection()
-    conn.execute('''DROP TABLE IF EXISTS designs''')  # Reset table to ensure correct schema
+    conn.execute('''DROP TABLE IF EXISTS designs''')
     conn.execute('''CREATE TABLE designs
                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
@@ -73,36 +73,99 @@ def create_table():
 
 def save_design_to_db(user_id, style, materials, clothing_type, production_method, packaging, 
                      production_location, shipping_method, base_color, custom_design, sustainability_score):
+    """
+    Save design data to database with comprehensive error handling and logging
+    """
     conn = get_db_connection()
     if not conn:
+        print("Database connection failed")
         return None
         
     try:
-        # Convert materials list to string
+        # Data validation
+        if not all([style, materials, clothing_type, production_method, packaging, 
+                   production_location, shipping_method, base_color]):
+            raise ValueError("Missing required fields")
+            
+        # Convert materials list to string if necessary
         materials_str = ", ".join(materials) if isinstance(materials, list) else materials
         
-        # Insert into database
+        # Validate sustainability score
+        sustainability_score = int(sustainability_score) if sustainability_score is not None else 0
+        
+        # Insert into database with all fields
         cursor = conn.cursor()
-        cursor.execute("""
+        insert_query = """
             INSERT INTO designs (
                 user_id, style, materials, clothing_type, production_method, 
                 packaging, production_location, shipping_method, base_color, 
                 custom_design, sustainability_score
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
+        """
+        
+        cursor.execute(insert_query, (
             user_id, style, materials_str, clothing_type, production_method,
             packaging, production_location, shipping_method, base_color,
             custom_design, sustainability_score
         ))
         
         conn.commit()
-        return cursor.lastrowid
+        inserted_id = cursor.lastrowid
         
+        # Verify insertion
+        cursor.execute("SELECT * FROM designs WHERE id = ?", (inserted_id,))
+        verification = cursor.fetchone()
+        
+        if verification:
+            print(f"Successfully saved design with ID: {inserted_id}")
+            return inserted_id
+        else:
+            print("Verification failed - data not saved properly")
+            return None
+            
     except Exception as e:
         print(f"Database Error: {str(e)}")
         if conn:
             conn.rollback()
         return None
+    finally:
+        if conn:
+            conn.close()
+
+def verify_database_storage():
+    """
+    Verify that the database is storing all fields correctly
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+        
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM designs ORDER BY id DESC LIMIT 1")
+        last_record = cursor.fetchone()
+        
+        if last_record:
+            # Check if all fields are present
+            required_fields = ['id', 'user_id', 'style', 'materials', 'clothing_type', 
+                             'production_method', 'packaging', 'production_location', 
+                             'shipping_method', 'base_color', 'custom_design', 
+                             'sustainability_score', 'timestamp']
+                             
+            record_dict = dict(zip([description[0] for description in cursor.description], last_record))
+            
+            missing_fields = [field for field in required_fields if field not in record_dict]
+            
+            if missing_fields:
+                print(f"Missing fields in database: {missing_fields}")
+                return False
+            
+            print("All fields are being stored correctly")
+            return True
+            
+    except Exception as e:
+        print(f"Verification Error: {str(e)}")
+        return False
     finally:
         if conn:
             conn.close()
@@ -687,6 +750,16 @@ def display_design_studio():
             if not selected_materials:
                 st.error("Please select at least one material before generating the design.")
                 return
+            
+            # In your generate button click handler:
+            design_id = save_design_to_db(...)
+            if design_id:
+                if verify_database_storage():
+                    st.success("Design saved successfully with complete data!")
+                else:
+                    st.warning("Design saved but some data might be missing. Please check the database.")
+            else:
+                st.error("Failed to save design data.")
 
             # Store all current selections in session state
             st.session_state.current_data = {
