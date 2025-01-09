@@ -808,19 +808,16 @@ def display_design_studio():
 
             if st.session_state.generated_design:
                 try:
-                    if isinstance(st.session_state.generated_design, bytes):
-                        st.download_button(
-                            label="Download Design Image",
-                            data=st.session_state.generated_design,
-                            file_name="sustainable_design.png",
-                            mime="image/png",
-                            key="download_design",
-                            use_container_width=True
-                        )
-                    else:
-                        st.warning("Design image not available for download")
+                    st.download_button(
+                        label="Download Design Image",
+                        data=st.session_state.generated_design,
+                        file_name="sustainable_design.png",
+                        mime="image/png",
+                        key="download_design",
+                        use_container_width=True
+                    )
                 except Exception as e:
-                    st.error(f"Error creating design download button: {str(e)}")
+                    st.error(f"Error with download button: {str(e)}")
 
 if __name__ == "__main__":
     init_session_state() 
