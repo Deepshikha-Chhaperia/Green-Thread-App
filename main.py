@@ -367,9 +367,9 @@ def main():
         display_design_studio_wrapper()
     elif page == "fabric_analysis":
         interactive_sustainable_fabric_advisor()
-    #elif page == "sustainability_dashboard":
-     #   with get_db_connection() as conn:
-      #      display_sustainability_dashboard(conn)
+    elif page == "sustainability_dashboard":
+        with get_db_connection() as conn:
+            display_sustainability_dashboard(conn)
     elif page == "production_optimizer":
         display_sustainable_production_optimizer()
     elif page == "textile_generator":
