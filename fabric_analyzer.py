@@ -269,7 +269,7 @@ def interactive_sustainable_fabric_advisor():
     
     if uploaded_file:
         image = Image.open(uploaded_file).convert('RGB')
-        st.image(image, caption="Your Fabric", use_column_width=True)
+        st.image(image, caption="Your Fabric", use_container_width=True)
         
         model = load_model()
         
