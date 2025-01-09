@@ -6,16 +6,14 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 import google.generativeai as genai
-import qrcode
 import streamlit as st
 import torch
-from diffusers import StableDiffusionPipeline #library from huggingface
+from diffusers import StableDiffusionPipeline
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, jsonify
-from google.api_core import exceptions #core functionality for interacting with gcloud api
+from google.api_core import exceptions
 from google.api_core import retry
-from http.server import BaseHTTPRequestHandler
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -52,39 +50,6 @@ def get_db_connection():
         st.error(f"Database connection error: {str(e)}")
         return None
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        # Extract QR code ID from path
-        qr_code_id = self.path.split('/')[-1]
-        
-        conn = get_db_connection()
-        try:
-            design = conn.execute("""
-                SELECT care_instructions, materials, clothing_type, style
-                FROM designs 
-                WHERE qr_code_id = ?
-            """, (qr_code_id,)).fetchone()
-            
-            if design:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                
-                response = {
-                    'care_instructions': design['care_instructions'],
-                    'materials': design['materials'],
-                    'clothing_type': design['clothing_type'],
-                    'style': design['style']
-                }
-                
-                self.wfile.write(json.dumps(response).encode())
-            else:
-                self.send_response(404)
-                self.end_headers()
-                self.wfile.write(b'Care instructions not found')
-        finally:
-            conn.close()
-
 def create_table():
     """Create database table with all required columns"""
     conn = get_db_connection()
@@ -102,8 +67,6 @@ def create_table():
                     base_color TEXT,
                     custom_design TEXT,
                     sustainability_score INTEGER,
-                    qr_code_id TEXT UNIQUE,
-                    care_instructions TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
@@ -112,23 +75,11 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
                      production_location, shipping_method, base_color, custom_design, sustainability_score):
     conn = get_db_connection()
     if not conn:
-        return None, None, None
+        return None
         
     try:
         # Convert materials list to string
         materials_str = ", ".join(materials) if isinstance(materials, list) else materials
-        
-        # Generate QR code ID
-        qr_code_id = str(uuid.uuid4())
-        
-        # Generate care instructions
-        care_instructions = generate_care_instructions(materials, clothing_type, style)
-        
-        # Generate QR code first
-        qr_image_bytes = generate_qr_code_image(qr_code_id, None, materials, clothing_type, style)
-        
-        if qr_image_bytes is None:
-            raise ValueError("QR code generation failed")
         
         # Insert into database
         cursor = conn.cursor()
@@ -136,22 +87,22 @@ def save_design_to_db(user_id, style, materials, clothing_type, production_metho
             INSERT INTO designs (
                 user_id, style, materials, clothing_type, production_method, 
                 packaging, production_location, shipping_method, base_color, 
-                custom_design, sustainability_score, qr_code_id, care_instructions
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                custom_design, sustainability_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id, style, materials_str, clothing_type, production_method,
             packaging, production_location, shipping_method, base_color,
-            custom_design, sustainability_score, qr_code_id, care_instructions
+            custom_design, sustainability_score
         ))
         
         conn.commit()
-        return cursor.lastrowid, qr_image_bytes, care_instructions
+        return cursor.lastrowid
         
     except Exception as e:
         print(f"Database Error: {str(e)}")
         if conn:
             conn.rollback()
-        return None, None, None
+        return None
     finally:
         if conn:
             conn.close()
@@ -225,10 +176,12 @@ def init_session_state():
         st.session_state.model_loaded = False
     if 'generated_design' not in st.session_state:
         st.session_state.generated_design = None
-    if 'qr_code' not in st.session_state:
-        st.session_state.qr_code = None
-    if 'care_instructions' not in st.session_state:
-        st.session_state.care_instructions = None
+    if 'current_data' not in st.session_state:
+        st.session_state.current_data = None
+    if 'formatted_overall_score' not in st.session_state:
+        st.session_state.formatted_overall_score = None
+    if 'design_history' not in st.session_state:
+        st.session_state.design_history = []
     
 # Configure retry strategy
 retry_strategy = retry.Retry(
@@ -250,152 +203,6 @@ def generate_content_with_retry(model, prompt):
     except exceptions.GoogleAPICallError as e:
         st.warning(f"API call failed: {str(e)}. Retrying...")
         raise
-
-def generate_qr_code_image(qr_code_id, design_id, materials, clothing_type, style):
-    try:
-        # Create a simple QR code with the care instructions directly
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        
-        # Generate care instructions to include in QR
-        care_instructions = generate_care_instructions(materials, clothing_type, style)
-        
-        # Add the care instructions directly to QR code
-        qr.add_data(care_instructions)
-        qr.make(fit=True)
-        
-        # Create QR code image
-        qr_image = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to bytes
-        buffered = BytesIO()
-        qr_image.save(buffered, format="PNG")
-        qr_image_bytes = buffered.getvalue()
-        buffered.close()
-        
-        return qr_image_bytes
-        
-    except Exception as e:
-        print(f"QR Generation Error: {str(e)}")
-        return None
-
-def generate_care_instructions(materials, clothing_type, style):
-    model = genai.GenerativeModel('gemini-pro')
-    prompt = f"""
-    Generate concise care, recycling, and upcycling instructions for a {style} {clothing_type} made from {materials}.
-    
-    Include:
-    1. Care Instructions (washing, drying, storage)
-    2. Special Care Notes
-    3. Recycling Guidelines
-    4. Creative Upcycling Ideas
-    5. End-of-Life Recommendations
-    
-    Format as brief, clear bullet points suitable for scanning via QR code.
-    Keep the total response under 500 words.
-    """
-    try:
-        response = generate_content_with_retry(model, prompt)
-        return remove_all_asterisks(response)
-    except Exception as e:
-        return "Basic care: Wash cold, hang dry, recycle responsibly."
-
-def generate_qr_code(design_id, materials, clothing_type, style):
-    qr_code_id = str(uuid.uuid4())
-    
-    # Use environment variable for domain
-    vercel_domain = os.getenv('VERCEL_DOMAIN', 'localhost:3000')
-    
-    # Generate care instructions
-    care_instructions = generate_care_instructions(materials, clothing_type, style)
-    
-    qr_data = {
-        "id": qr_code_id,
-        "design_id": str(design_id),
-        "verify_url": f"https://{vercel_domain}/api/verify/{qr_code_id}"
-    }
-    
-    # Convert to JSON string
-    qr_json = json.dumps(qr_data, separators=(',', ':'))
-    
-    # Create QR code with optimal settings for clarity
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=4,
-    )
-    
-    # Add the data to QR code
-    qr.add_data(qr_json)
-    qr.make(fit=True)
-    
-    # Create QR code image
-    qr_image = qr.make_image(fill_color="black", back_color="white")
-    
-    # Convert to bytes
-    buffered = BytesIO()
-    qr_image.save(buffered, format="PNG")
-    qr_image_bytes = buffered.getvalue()
-    
-    # Store the QR code ID and care instructions in database
-    conn = get_db_connection()
-    try:
-        conn.execute("""
-            UPDATE designs 
-            SET qr_code_id = ?,
-                care_instructions = ?
-            WHERE id = ?
-        """, (qr_code_id, care_instructions, design_id))
-        conn.commit()
-    finally:
-        conn.close()
-    
-    return qr_image_bytes, care_instructions
-
-# Flask route to handle QR code scans
-@app.route('/care/<qr_code_id>')
-def get_care_instructions(qr_code_id):
-    conn = get_db_connection()
-    try:
-        design = conn.execute("""
-            SELECT care_instructions, materials, clothing_type, style
-            FROM designs 
-            WHERE qr_code_id = ?
-        """, (qr_code_id,)).fetchone()
-        
-        if design:
-            return jsonify({
-                'care_instructions': design['care_instructions'],
-                'materials': design['materials'],
-                'clothing_type': design['clothing_type'],
-                'style': design['style']
-            })
-        else:
-            return jsonify({'error': 'Care instructions not found'}), 404
-    finally:
-        conn.close()
-
-def safe_download_button(label, data, file_name, mime_type):
-    """Safely handle download button with data validation"""
-    if data is not None:
-        try:
-            st.download_button(
-                label=label,
-                data=data,
-                file_name=file_name,
-                mime=mime_type,
-                key=f"download_{file_name}",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"Error creating download button: {str(e)}")
-    else:
-        st.warning(f"No data available to download for {label}")
 
 def remove_all_asterisks(text):
     return text.replace('*', '')
@@ -589,8 +396,7 @@ def extract_sustainability_score(overall_score):
         return score, overall_score
     except (StopIteration, IndexError, ValueError):
         st.warning("Could not extract sustainability score. Using default value of 50.")
-        return 50, overall_score  # Return the original overall_score text as well
-        #FFF0F5
+        return 50, overall_score
     
 def display_design_studio():
     st.markdown("""
@@ -805,10 +611,6 @@ def display_design_studio():
 
     if 'generated_design' not in st.session_state:
         st.session_state.generated_design = None
-    if 'qr_code' not in st.session_state:
-        st.session_state.qr_code = None
-    if 'care_instructions' not in st.session_state:
-        st.session_state.care_instructions = None
     if 'current_data' not in st.session_state:
         st.session_state.current_data = None
     if 'formatted_overall_score' not in st.session_state:
@@ -924,8 +726,8 @@ def display_design_studio():
                         sustainability_score, formatted_overall_score = extract_sustainability_score(overall_score)
                         st.session_state.formatted_overall_score = formatted_overall_score
 
-                        # Save design and generate QR code
-                        design_id, qr_image_bytes, care_instructions = save_design_to_db(
+                        # Save design to database
+                        design_id = save_design_to_db(
                             user_id="default_user",
                             style=style,
                             materials=selected_materials,
@@ -941,13 +743,6 @@ def display_design_studio():
 
                         if design_id:
                             st.markdown(f'<div style="background-color: #8B4513; color: white; padding: 10px; border-radius: 5px;">Design saved successfully with ID: {design_id}</div>', unsafe_allow_html=True)
-
-                        # Store QR code and care instructions in session state
-                        if design_id and qr_image_bytes and care_instructions:
-                            st.session_state.qr_code = qr_image_bytes
-                            st.session_state.care_instructions = care_instructions
-                        else:
-                            st.error("Failed to generate QR code or care instructions")
 
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
@@ -1011,93 +806,21 @@ def display_design_studio():
                     ethical_production = recommend_ethical_production(st.session_state.current_data['production_location'])
                     st.markdown(f'<div style="color: black;">{ethical_production}</div>', unsafe_allow_html=True)
 
-            if st.session_state.qr_code:
-                st.image(st.session_state.qr_code, caption="Scan for Care & Recycling Instructions", width=200, output_format="PNG")
-
-                with st.expander("Care & Recycling Instructions"):
-                    st.markdown('<div style="font-size: 24px; color: #8B4513; border-bottom: 2px solid #DAA520; padding-bottom: 8px; margin-bottom: 16px;">Care & Recycling Guidelines</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="color: black;">{st.session_state.care_instructions}</div>', unsafe_allow_html=True)
-
-            if st.session_state.generated_design and st.session_state.qr_code:
-                # Create two columns for download buttons
-                download_col1, download_col2 = st.columns(2)
-                
-                with download_col1:
-                    try:
-                        if isinstance(st.session_state.generated_design, bytes):
-                            st.download_button(
+            if st.session_state.generated_design:
+                try:
+                    if isinstance(st.session_state.generated_design, bytes):
+                        st.download_button(
                             label="Download Design Image",
                             data=st.session_state.generated_design,
                             file_name="sustainable_design.png",
                             mime="image/png",
                             key="download_design",
-                            on_click=None,  # Prevents rerun
-                            args=None,
-                            kwargs=None,
                             use_container_width=True
                         )
-                        else:
-                            st.warning("Design image not available for download")
-                    except Exception as e:
-                        st.error(f"Error creating design download button: {str(e)}")
-                
-                with download_col2:
-                    try:
-                        if isinstance(st.session_state.qr_code, bytes):
-                            st.download_button(
-                            label="Download QR Code",
-                            data=st.session_state.qr_code,
-                            file_name="care_instructions_qr.png",
-                            mime="image/png",
-                            key="download_qr",
-                            on_click=None,  # Prevents rerun
-                            args=None,
-                            kwargs=None,
-                            use_container_width=True
-                        )
-                        else:
-                            st.warning("QR code not available for download")
-                    except Exception as e:
-                        st.error(f"Error creating QR code download button: {str(e)}")
-            else:
-                if not st.session_state.generated_design:
-                    st.info("Generate a design first to enable downloads")
-                elif not st.session_state.qr_code:
-                    st.info("QR code generation is required for downloads")
-            
-            # Add QR code scanning instructions
-            st.markdown("""
-            <div h2 style="font-size: 1.8rem; font-weight: bold; color: #333333 !important;">
-            How to Use the QR Code:
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown(""" 
-            1. Download the QR code image
-            2. Use any QR code scanner app on your phone
-            3. Scan the downloaded QR code
-            4. View your garment's care instructions instantly!
-            """)
-            
-            # Display the care instructions directly below
-            if st.session_state.care_instructions:
-                with st.expander("View Care Instructions Directly"):
-                    st.markdown(st.session_state.care_instructions)
-
-# Disable automatic script rerunning
-def init_session_state():
-    """Initialize session state variables"""
-    session_state_vars = {
-        'generated_design': None,
-        'qr_code': None,
-        'care_instructions': None,
-        'current_data': None,
-        'formatted_overall_score': None
-    }
-    
-    for var, default in session_state_vars.items():
-        if var not in st.session_state:
-            st.session_state[var] = default
-
+                    else:
+                        st.warning("Design image not available for download")
+                except Exception as e:
+                    st.error(f"Error creating design download button: {str(e)}")
 
 if __name__ == "__main__":
     init_session_state() 
