@@ -35,14 +35,15 @@ def get_db_connection():
             connection.close()
 
 def init_db():
-    """Initialize database tables"""
     with get_db_connection() as conn:
         c = conn.cursor()
-        # Create users table
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
         
-        # Create designs table
+        # Drop the existing designs table if it exists
+        c.execute('DROP TABLE IF EXISTS designs')
+        
+        # Create the designs table with all required columns
         c.execute('''CREATE TABLE IF NOT EXISTS designs
                      (id INTEGER PRIMARY KEY, 
                       user_id INTEGER,
@@ -60,21 +61,59 @@ def init_db():
         conn.commit()
 
 def fetch_designs_from_db():
-    """Fetch designs data from database"""
+    """Fetch designs data from database with graceful fallback for missing columns"""
     try:
         with get_db_connection() as conn:
-            query = """
-            SELECT style, materials, clothing_type, production_method, packaging,
-                   shipping_method, base_color, sustainability_score, timestamp
+            # First, get the actual columns from the designs table
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(designs)")
+            available_columns = [column[1] for column in cursor.fetchall()]
+
+            # Base columns we want to fetch
+            desired_columns = [
+                'style', 'materials', 'clothing_type', 'custom_design',
+                'timestamp', 'recycling_instructions'
+            ]
+
+            # Only select columns that actually exist in the table
+            valid_columns = [col for col in desired_columns if col in available_columns]
+            
+            # Construct query with only existing columns
+            query = f"""
+            SELECT {', '.join(valid_columns)}
             FROM designs
             """
+            
             df = pd.read_sql_query(query, conn)
+            
+            # Add missing columns with default values to ensure dashboard works
+            required_columns = {
+                'style': 'Unknown Style',
+                'materials': 'Not Specified',
+                'clothing_type': 'Not Specified',
+                'production_method': 'Standard',
+                'packaging': 'Standard',
+                'shipping_method': 'Standard',
+                'base_color': 'Not Specified',
+                'sustainability_score': 50.0,
+                'timestamp': datetime.now()
+            }
+            
+            # Add any missing columns with default values
+            for col, default_value in required_columns.items():
+                if col not in df.columns:
+                    df[col] = default_value
+
+            # Ensure proper data types
             df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce')
+            df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce').fillna(50.0)
+            
             return df
+            
     except Exception as e:
-        st.error(f"Error fetching data: {str(e)}")
-        return pd.DataFrame()
+        st.warning("Some data columns may be missing. Displaying available data with defaults.")
+        # Return an empty DataFrame with all required columns
+        return pd.DataFrame(columns=required_columns.keys())
     
 def estimate_environmental_impact(df):
     # Calculate impact based on sustainability score and number of designs
@@ -506,6 +545,7 @@ def display_sustainability_dashboard(conn):
                 
     """, unsafe_allow_html=True)
 
+    # Header
     st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
     st.markdown("Empowering sustainable fashion choices for a greener future!")
     
@@ -515,8 +555,9 @@ def display_sustainability_dashboard(conn):
         
         # Fetch and process data
         df = fetch_designs_from_db()
+        
         if df.empty:
-            st.info("No designs available. Start creating sustainable designs to see the impact!")
+            st.info("No designs available yet. Start creating sustainable designs to see the impact!")
             return
             
         # Display total designs
@@ -539,7 +580,7 @@ def display_sustainability_dashboard(conn):
             st.metric("Waste Reduced", f"{impact['waste_reduction']:,.0f} kg")
         with col4:
             st.metric("Energy Saved", f"{impact['energy_savings']:,.0f} kWh")
-            
+        
         # Charts
         st.plotly_chart(create_sustainability_score_chart(filtered_df), use_container_width=True)
         
@@ -548,8 +589,6 @@ def display_sustainability_dashboard(conn):
             st.plotly_chart(create_materials_chart(filtered_df), use_container_width=True)
         with col2:
             st.plotly_chart(create_production_method_chart(filtered_df), use_container_width=True)
-            
-        st.plotly_chart(create_sustainability_trend_chart(filtered_df), use_container_width=True)
         
         # Leaderboard
         st.header("Top Sustainable Designs")
@@ -557,9 +596,8 @@ def display_sustainability_dashboard(conn):
         for _, design in top_designs.iterrows():
             st.markdown(f"""
                 **{design['style']} {design['clothing_type']}**
-                - Score: {design['sustainability_score']:.1f}/100
                 - Materials: {design['materials']}
-                - Production: {design['production_method']}
+                - Sustainability Score: {design['sustainability_score']:.1f}/100
             """)
             
         # Sustainability Tips
@@ -568,7 +606,8 @@ def display_sustainability_dashboard(conn):
         st.write(tips)
         
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
+        st.error("Unable to load dashboard. Please try again later.")
+        st.error(f"Error details: {str(e)}")
 
 if __name__ == "__main__":
     display_sustainability_dashboard()

@@ -49,10 +49,25 @@ def init_db():
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
+        
+        # Drop the existing designs table if it exists
+        c.execute('DROP TABLE IF EXISTS designs')
+        
+        # Create the designs table with all required columns
         c.execute('''CREATE TABLE IF NOT EXISTS designs
-                     (id INTEGER PRIMARY KEY, user_id INTEGER, 
-                      style TEXT, materials TEXT, clothing_type TEXT, 
-                      custom_design TEXT, timestamp DATETIME, recycling_instructions TEXT)''')
+                     (id INTEGER PRIMARY KEY, 
+                      user_id INTEGER,
+                      style TEXT,
+                      materials TEXT,
+                      clothing_type TEXT,
+                      custom_design TEXT,
+                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                      recycling_instructions TEXT,
+                      production_method TEXT,
+                      packaging TEXT,
+                      shipping_method TEXT,
+                      base_color TEXT,
+                      sustainability_score REAL)''')
         conn.commit()
 
 def sidebar_menu():
