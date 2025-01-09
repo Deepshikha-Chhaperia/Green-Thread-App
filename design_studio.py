@@ -750,16 +750,6 @@ def display_design_studio():
             if not selected_materials:
                 st.error("Please select at least one material before generating the design.")
                 return
-            
-            # In your generate button click handler:
-            design_id = save_design_to_db(...)
-            if design_id:
-                if verify_database_storage():
-                    st.success("Design saved successfully with complete data!")
-                else:
-                    st.warning("Design saved but some data might be missing. Please check the database.")
-            else:
-                st.error("Failed to save design data.")
 
             # Store all current selections in session state
             st.session_state.current_data = {
