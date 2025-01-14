@@ -17,88 +17,14 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Database configuration
 DB_NAME = 'greenthreads.db'
-thread_local = threading.local()
-
-# Define options for dropdowns
-STYLES = ["Casual", "Formal", "Sporty", "Vintage", "Bohemian", "Minimalist", 
-          "Avant-garde", "Streetwear", "Romantic", "Preppy", "Other"]
-
-MATERIALS = ["Organic Cotton", "Recycled Polyester", "Hemp", "Tencel", "Bamboo", 
-            "Cork", "Recycled Nylon", "Piñatex", "Econyl", "Recycled Wool", 
-            "Organic Linen", "Soy Fabric", "Qmilk", "Orange Fiber", 
-            "Recycled Denim", "Other"]
-
-CLOTHING_TYPES = ["Shirt", "Dress", "Pants", "Jacket", "Skirt", "Sweater", 
-                 "Jumpsuit", "Coat", "Blouse", "Shorts", "Cardigan", "Hoodie", 
-                 "T-Shirt", "Crop Top", "Other"]
-
-PRODUCTION_METHODS = ["Cut-and-Sew", "Fully Fashioned Knitting", 
-                     "Seamless Knitting", "3D Printing", 
-                     "Zero Waste Pattern Cutting", "Upcycling", "Other"]
-
-PACKAGING_OPTIONS = ["Recycled Cardboard", "Compostable Mailers", 
-                    "Reusable Fabric Bags", "Minimal Packaging", 
-                    "Plastic-free Packaging", "Other"]
-
-PRODUCTION_LOCATIONS = ["Local (within 100 miles)", "Domestic", "Nearshore", 
-                       "Offshore", "Other"]
-
-SHIPPING_METHODS = ["Ground Shipping", "Air Freight", "Sea Freight", 
-                   "Hybrid (Sea + Ground)", "Other"]
-
-BASE_COLORS = ["White", "Black", "Red", "Blue", "Green", "Yellow", "Purple", 
-               "Pink", "Orange", "Brown", "Gray", "Other"]
 
 def get_db_connection():
-    """Get a thread-local database connection"""
-    if not hasattr(thread_local, "connection"):
-        thread_local.connection = sqlite3.connect(DB_NAME, check_same_thread=False)
-    return thread_local.connection
+    """Create a new database connection for the current thread"""
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-def with_db_connection(f):
-    """Decorator to handle database connections"""
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        conn = get_db_connection()
-        try:
-            return f(conn, *args, **kwargs)
-        except Exception as e:
-            st.error(f"Database error: {str(e)}")
-            raise
-    return wrapper
-
-@with_db_connection
-def init_db(conn):
-    """Initialize database with thread-safe connection"""
-    try:
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS users
-                     (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
-        
-        # Create the designs table with all required columns
-        c.execute('''CREATE TABLE IF NOT EXISTS designs
-                     (id INTEGER PRIMARY KEY, 
-                      user_id INTEGER,
-                      style TEXT,
-                      materials TEXT,
-                      clothing_type TEXT,
-                      custom_design TEXT,
-                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                      recycling_instructions TEXT,
-                      production_method TEXT,
-                      packaging TEXT,
-                      shipping_method TEXT,
-                      base_color TEXT,
-                      production_location TEXT,
-                      sustainability_score REAL)''')
-        conn.commit()
-    except Exception as e:
-        st.error(f"Failed to initialize database: {str(e)}")
-        raise
-
-@with_db_connection
-def fetch_designs_from_db(conn):
-    """Fetch designs data from database with thread-safe connection"""
+def fetch_designs_from_db():
+    """Fetch designs data from database"""
+    conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(designs)")
@@ -141,6 +67,8 @@ def fetch_designs_from_db(conn):
     except Exception as e:
         st.warning("Some data columns may be missing. Displaying available data with defaults.")
         return pd.DataFrame(columns=required_columns.keys())
+    finally:
+        conn.close()
 
 def estimate_environmental_impact(df):
     total_score = df['sustainability_score'].sum()
@@ -429,13 +357,6 @@ def display_sustainability_dashboard():
     """, unsafe_allow_html=True)
 
     try:
-        # Initialize database
-        init_db()
-        
-        # Header
-        st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
-        st.markdown("Empowering sustainable fashion choices for a greener future!")
-        
         # Fetch and process data
         df = fetch_designs_from_db()
         
