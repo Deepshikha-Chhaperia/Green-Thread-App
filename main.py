@@ -293,8 +293,8 @@ def display_home():
     # Key Features Section
     st.markdown("<h2 style='color: #8B4513; text-align: center; margin: 3rem 0; font-size: 2.5rem;'>Our Revolutionary Features</h2>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
-    
+    col1, col2, col3 = st.columns(3)
+
     with col1:
         st.markdown("""
         <div class="feature-card">
@@ -306,7 +306,7 @@ def display_home():
         
         st.markdown("""
         <div class="feature-card">
-            <h3 class="feature-title">Fabric Analyzer</h3>
+            <h3 class="feature-title">Fabric Advisor</h3>
             <p class="feature-description">Get AI-powered insights for optimal fabric selection and sustainability.</p>
             <a href="?page=fabric_analysis" class="cta-button">Analyze Fabrics</a>
         </div>
@@ -326,6 +326,15 @@ def display_home():
             <h3 class="feature-title">Production Optimizer</h3>
             <p class="feature-description">Optimize your production process for maximum sustainability and efficiency.</p>
             <a href="?page=production_optimizer" class="cta-button">Optimize Now</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div class="feature-card">
+            <h3 class="feature-title">Textile Generator</h3>
+            <p class="feature-description">Generate eco-friendly textile patterns and designs using advanced AI technology.</p>
+            <a href="?page=textile_generator" class="cta-button">Generate Patterns</a>
         </div>
         """, unsafe_allow_html=True)
 
@@ -368,8 +377,7 @@ def main():
     elif page == "fabric_analysis":
         interactive_sustainable_fabric_advisor()
     elif page == "sustainability_dashboard":
-        with get_db_connection() as conn:
-            display_sustainability_dashboard(conn)
+        display_sustainability_dashboard()
     elif page == "production_optimizer":
         display_sustainable_production_optimizer()
     elif page == "textile_generator":

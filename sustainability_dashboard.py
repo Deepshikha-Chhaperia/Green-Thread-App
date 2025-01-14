@@ -7,8 +7,8 @@ import sqlite3
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
-from queue import Queue
-from contextlib import contextmanager
+import threading
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -17,31 +17,63 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Database configuration
 DB_NAME = 'greenthreads.db'
-connection_pool = Queue(maxsize=5)
+thread_local = threading.local()
 
-@contextmanager
+# Define options for dropdowns
+STYLES = ["Casual", "Formal", "Sporty", "Vintage", "Bohemian", "Minimalist", 
+          "Avant-garde", "Streetwear", "Romantic", "Preppy", "Other"]
+
+MATERIALS = ["Organic Cotton", "Recycled Polyester", "Hemp", "Tencel", "Bamboo", 
+            "Cork", "Recycled Nylon", "Piñatex", "Econyl", "Recycled Wool", 
+            "Organic Linen", "Soy Fabric", "Qmilk", "Orange Fiber", 
+            "Recycled Denim", "Other"]
+
+CLOTHING_TYPES = ["Shirt", "Dress", "Pants", "Jacket", "Skirt", "Sweater", 
+                 "Jumpsuit", "Coat", "Blouse", "Shorts", "Cardigan", "Hoodie", 
+                 "T-Shirt", "Crop Top", "Other"]
+
+PRODUCTION_METHODS = ["Cut-and-Sew", "Fully Fashioned Knitting", 
+                     "Seamless Knitting", "3D Printing", 
+                     "Zero Waste Pattern Cutting", "Upcycling", "Other"]
+
+PACKAGING_OPTIONS = ["Recycled Cardboard", "Compostable Mailers", 
+                    "Reusable Fabric Bags", "Minimal Packaging", 
+                    "Plastic-free Packaging", "Other"]
+
+PRODUCTION_LOCATIONS = ["Local (within 100 miles)", "Domestic", "Nearshore", 
+                       "Offshore", "Other"]
+
+SHIPPING_METHODS = ["Ground Shipping", "Air Freight", "Sea Freight", 
+                   "Hybrid (Sea + Ground)", "Other"]
+
+BASE_COLORS = ["White", "Black", "Red", "Blue", "Green", "Yellow", "Purple", 
+               "Pink", "Orange", "Brown", "Gray", "Other"]
+
 def get_db_connection():
-    """Get a database connection from the pool"""
-    try:
-        connection = connection_pool.get(block=False)
-    except:
-        connection = sqlite3.connect(DB_NAME)
-    try:
-        yield connection
-    finally:
-        try:
-            connection_pool.put(connection)
-        except:
-            connection.close()
+    """Get a thread-local database connection"""
+    if not hasattr(thread_local, "connection"):
+        thread_local.connection = sqlite3.connect(DB_NAME, check_same_thread=False)
+    return thread_local.connection
 
-def init_db():
-    with get_db_connection() as conn:
+def with_db_connection(f):
+    """Decorator to handle database connections"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        conn = get_db_connection()
+        try:
+            return f(conn, *args, **kwargs)
+        except Exception as e:
+            st.error(f"Database error: {str(e)}")
+            raise
+    return wrapper
+
+@with_db_connection
+def init_db(conn):
+    """Initialize database with thread-safe connection"""
+    try:
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)''')
-        
-        # Drop the existing designs table if it exists
-        c.execute('DROP TABLE IF EXISTS designs')
         
         # Create the designs table with all required columns
         c.execute('''CREATE TABLE IF NOT EXISTS designs
@@ -57,74 +89,67 @@ def init_db():
                       packaging TEXT,
                       shipping_method TEXT,
                       base_color TEXT,
+                      production_location TEXT,
                       sustainability_score REAL)''')
         conn.commit()
+    except Exception as e:
+        st.error(f"Failed to initialize database: {str(e)}")
+        raise
 
-def fetch_designs_from_db():
-    """Fetch designs data from database with graceful fallback for missing columns"""
+@with_db_connection
+def fetch_designs_from_db(conn):
+    """Fetch designs data from database with thread-safe connection"""
     try:
-        with get_db_connection() as conn:
-            # First, get the actual columns from the designs table
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(designs)")
-            available_columns = [column[1] for column in cursor.fetchall()]
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(designs)")
+        available_columns = [column[1] for column in cursor.fetchall()]
 
-            # Base columns we want to fetch
-            desired_columns = [
-                'style', 'materials', 'clothing_type', 'custom_design',
-                'timestamp', 'recycling_instructions'
-            ]
+        desired_columns = [
+            'style', 'materials', 'clothing_type', 'custom_design',
+            'timestamp', 'recycling_instructions', 'production_method',
+            'packaging', 'shipping_method', 'base_color', 'production_location',
+            'sustainability_score'
+        ]
 
-            # Only select columns that actually exist in the table
-            valid_columns = [col for col in desired_columns if col in available_columns]
-            
-            # Construct query with only existing columns
-            query = f"""
-            SELECT {', '.join(valid_columns)}
-            FROM designs
-            """
-            
-            df = pd.read_sql_query(query, conn)
-            
-            # Add missing columns with default values to ensure dashboard works
-            required_columns = {
-                'style': 'Unknown Style',
-                'materials': 'Not Specified',
-                'clothing_type': 'Not Specified',
-                'production_method': 'Standard',
-                'packaging': 'Standard',
-                'shipping_method': 'Standard',
-                'base_color': 'Not Specified',
-                'sustainability_score': 50.0,
-                'timestamp': datetime.now()
-            }
-            
-            # Add any missing columns with default values
-            for col, default_value in required_columns.items():
-                if col not in df.columns:
-                    df[col] = default_value
+        valid_columns = [col for col in desired_columns if col in available_columns]
+        
+        query = f"SELECT {', '.join(valid_columns)} FROM designs"
+        df = pd.read_sql_query(query, conn)
+        
+        required_columns = {
+            'style': 'Unknown Style',
+            'materials': 'Not Specified',
+            'clothing_type': 'Not Specified',
+            'production_method': 'Standard',
+            'packaging': 'Standard',
+            'shipping_method': 'Standard',
+            'base_color': 'Not Specified',
+            'production_location': 'Not Specified',
+            'sustainability_score': 50.0,
+            'timestamp': datetime.now()
+        }
+        
+        for col, default_value in required_columns.items():
+            if col not in df.columns:
+                df[col] = default_value
 
-            # Ensure proper data types
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce').fillna(50.0)
-            
-            return df
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['sustainability_score'] = pd.to_numeric(df['sustainability_score'], errors='coerce').fillna(50.0)
+        
+        return df
             
     except Exception as e:
         st.warning("Some data columns may be missing. Displaying available data with defaults.")
-        # Return an empty DataFrame with all required columns
         return pd.DataFrame(columns=required_columns.keys())
-    
+
 def estimate_environmental_impact(df):
-    # Calculate impact based on sustainability score and number of designs
     total_score = df['sustainability_score'].sum()
     num_designs = len(df)
     
-    # Adjust impact calculations based on sustainability score
-    water_saved = total_score * 10  # Liters
-    co2_reduced = total_score * 0.5  # kg
-    waste_reduction = total_score * 0.2  # kg
-    energy_savings = total_score * 5  # kWh
+    water_saved = total_score * 10
+    co2_reduced = total_score * 0.5
+    waste_reduction = total_score * 0.2
+    energy_savings = total_score * 5
     
     return {
         "water_usage_reduction": water_saved,
@@ -147,7 +172,7 @@ def create_sustainability_score_chart(df):
         labels={'sustainability_score': 'Score', 'timestamp': 'Date'},
         height=500
     )
-    fig.update_traces(marker=dict(sizemin=5)) #min size of markers/data points
+    fig.update_traces(marker=dict(sizemin=5))
     fig.update_layout(
         xaxis_title="Date",
         yaxis_title="Sustainability Score",
@@ -157,36 +182,26 @@ def create_sustainability_score_chart(df):
         paper_bgcolor='rgba(0,0,0,0)',
         title_font_color="#000000",
         showlegend=False,
-        margin=dict(l=50, r=50, t=50, b=50) 
-#margins around the plotting area to prevent labels or data points from overlapping with the edges.
-    )
-    fig.update_traces(
-        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black")
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     return fig
 
 def create_materials_chart(df):
     materials = df['materials'].str.split(',', expand=True).stack().value_counts()
-    #stack the column into single series, creating a list of materials used in designs
-    #value_count: counts the occurence of each unique material
     fig = px.pie(
-        values=materials.values, #count
+        values=materials.values,
         names=materials.index,
         title="Sustainable Materials Usage",
-        hole=0.4, #donut chart
-        height=500, #height of chart in pixels
+        hole=0.4,
+        height=500,
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
-    fig.update_traces(textposition='inside', textinfo='percent+label', textfont_size=10, textfont_color='black')
     fig.update_layout(
         font=dict(family="Arial, sans-serif", size=12, color="#000000"),
         plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)', #figure bg
+        paper_bgcolor='rgba(0,0,0,0)',
         showlegend=False,
-        margin=dict(l=50, r=50, t=50, b=50) #to prevent overlapping
-    )
-    fig.update_traces(
-        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black")
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     return fig
 
@@ -210,37 +225,6 @@ def create_production_method_chart(df):
         showlegend=False,
         margin=dict(l=50, r=50, t=50, b=100),
         xaxis_tickangle=-45
-    )
-    fig.update_traces(textfont_color='black')
-    fig.update_traces(
-        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black")
-    )
-    return fig
-
-def create_sustainability_trend_chart(df):
-    df_grouped = df.groupby('timestamp').agg({'sustainability_score': 'mean'}).reset_index()
-    fig = go.Figure() #emply plotly figure
-    fig.add_trace(go.Scatter(
-        x=df_grouped['timestamp'],
-        y=df_grouped['sustainability_score'],
-        mode='lines+markers',
-        name='Average Score',
-        line=dict(color='#1f77b4', width=2),
-        marker=dict(size=6)
-    ))
-    fig.update_layout(
-        title='Average Sustainability Score Trend',
-        xaxis_title="Date",
-        yaxis_title="Average Sustainability Score",
-        font=dict(family="Arial, sans-serif", size=12, color="#000000"),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        showlegend=False,
-        margin=dict(l=50, r=50, t=50, b=50),
-        yaxis_range=[0, 100]
-    )
-    fig.update_traces(
-        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black")
     )
     return fig
 
@@ -266,33 +250,12 @@ def filter_data_by_time_range(df, time_range):
         start_date = current_date - timedelta(days=30)
     elif time_range == "Last Year":
         start_date = current_date - timedelta(days=365)
-    else:  # All Time
+    else:
         return df
     
     return df[df['timestamp'].dt.date >= start_date]
 
-def create_sustainability_score_chart(df):
-    """Create scatter plot of sustainability scores"""
-    fig = px.scatter(
-        df,
-        x='timestamp',
-        y='sustainability_score',
-        color='clothing_type',
-        size='sustainability_score',
-        hover_data=['style', 'materials', 'production_method'],
-        title='Sustainability Scores Over Time'
-    )
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Sustainability Score",
-        yaxis_range=[0, 100],
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
-    )
-    return fig
-
 def generate_sustainability_tips():
-    """Generate sustainability tips using Gemini AI"""
     try:
         prompt = """Generate 5 actionable tips for promoting sustainable fashion,
                    focusing on eco-friendly materials, ethical production,
@@ -303,7 +266,7 @@ def generate_sustainability_tips():
     except Exception as e:
         return "Unable to generate tips at the moment. Please try again later."
 
-def display_sustainability_dashboard(conn):
+def display_sustainability_dashboard():
     # Custom CSS
     st.markdown("""
     <style>
@@ -332,14 +295,12 @@ def display_sustainability_dashboard(conn):
         color: #000000;
         margin-top: 5px;
     }
-    
     .stPlotlyChart {
         background-color: #ffffff;
         border-radius: 10px;
         padding: 15px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    /* Ensure graph text and numbers are black */
     .stPlotlyChart text {
         fill: black !important;
     }
@@ -348,23 +309,14 @@ def display_sustainability_dashboard(conn):
         padding-bottom: 10px;
         margin-bottom: 20px;
     }
-    .stPlotlyChart {
-        background-color: #ffffff;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
     .stSelectbox > label {
         color: black !important;
     }
-    /* Set background color to a warm, subtle gradient */
     .stApp {
-        background: linear-gradient(135deg, #FEFEFA 0%, #FFF8DC 100%); 
+        background: linear-gradient(135deg, #FEFEFA 0%, #FFF8DC 100%);
     }
-
-    /* Updated main heading style with 'AI SUSTAINABLE FASHION DESIGN STUDIO' on one line */
     .stApp h1 {
-        color: #8B4513; /* SaddleBrown for main text */
+        color: #8B4513;
         font-family: 'Playfair Display', serif;
         font-size: 3.5rem;
         font-weight: bold;
@@ -374,61 +326,42 @@ def display_sustainability_dashboard(conn):
         line-height: 1.2;
         margin-bottom: 20px;
     }
-
     .stApp h1 span {
-        color: #DAA520; /* GoldenRod for 'DESIGN STUDIO' */
+        color: #DAA520;
         font-family: 'Playfair Display', serif;
     }
-                    
-    /* Set main content color to black for better contrast */
     body, .stApp {
         color: black;
         font-family: 'Helvetica Neue', Arial, sans-serif;
     }
-
-    /* Modern dropdown style with dark gray background and white text */
     .stSelectbox > div > div {
         background-color: #333333;
         border: 1px solid #E0E0E0;
         border-radius: 4px;
         color: white;
     }
-
     .custom-header {
-        color: #8B4513; /* SaddleBrown */
+        color: #8B4513;
         font-size: 2rem;
         font-weight: bold;
         margin-top: 2rem;
         margin-bottom: 1rem;
-        border-bottom: 2px solid #DAA520; /* GoldenRod */
+        border-bottom: 2px solid #DAA520;
         padding-bottom: 5px;
     }
-
-    /* Make "AI Generated Sustainable Design" black */
     .main .block-container h2 {
         color: black;
     }
-
     .stMarkdown {
         color: black !important;
     }
-
-    .stSelectbox > div > div > div {
-        background-color: #333333;
-        color: white;
-    }
-
-    /* Style for dropdown options */
     .stSelectbox [role="listbox"] {
         background-color: #333333;
         color: white;
     }
-
     .stSelectbox [role="option"]:hover {
         background-color: #4a4a4a;
     }
-
-    /* Ensure text inputs and text areas have black text */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
         color: black !important;
@@ -436,44 +369,12 @@ def display_sustainability_dashboard(conn):
         border: 1px solid #E0E0E0;
         border-radius: 4px;
     }
-
-    /* Ensure multiselect dropdown text is white on dark gray background */
     .stMultiSelect div[role="button"] {
         color: white !important;
         background-color: #333333;
         border: 1px solid #E0E0E0;
         border-radius: 4px;
     }
-
-    /* Make labels above dropdowns black */
-    .stSelectbox label, .stMultiSelect label {
-        color: black !important;
-    }
-
-    /* Style for custom input fields */
-    .stTextInput input, .stTextArea textarea {
-        color: black !important;
-        background-color: white !important;
-    }
-
-    /* Ensure visibility of all text */
-    .stMarkdown, .stMarkdown p, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label {
-        opacity: 1 !important;
-        color: black !important;
-    }
-
-    /* Fix for custom design text area */
-    .stTextArea textarea {
-        color: black !important;
-        background-color: white !important;
-    }
-
-    /* Ensure all text in the main content area is black */
-    .main .block-container {
-        color: black;
-    }
-
-    /* Updated style for buttons, including download button */
     .stButton>button, .stDownloadButton>button {
         color: white !important;
         background-color: #333333 !important;
@@ -488,18 +389,12 @@ def display_sustainability_dashboard(conn):
         border-radius: 4px !important;
         transition: opacity 0.3s !important;
     }
-
-    /* Hover effect for buttons */
     .stButton>button:hover, .stDownloadButton>button:hover {
         opacity: 0.8;
     }
-
-    /* Ensure download button text is white */
     .stDownloadButton>button {
         color: white !important;
     }
-
-    /* Add a subtle golden glow to the page */
     .stApp::before {
         content: "";
         position: fixed;
@@ -511,47 +406,35 @@ def display_sustainability_dashboard(conn):
         pointer-events: none;
         z-index: -1;
     }
-    /* Make specific elements black */
     .stMarkdown, .stMarkdown p, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label {
         color: black !important;
     }
-
-    /* Ensure file uploader text is black */
     .stFileUploader label {
         color: black !important;
     }
-
-    /* Make subheaders black */
     .stApp h2, .stApp h3 {
         color: black !important;
     }
-
-    /* Ensure dropdown text is black when not focused */
     .stSelectbox > div > div {
         color: black;
     }
-
-    /* Keep dropdown options white on dark background when expanded */
     .stSelectbox [role="listbox"] {
         background-color: #333333;
         color: white;
     }
-
-    /* Ensure custom question input text is black */
     .stTextInput input {
         color: black !important;
     }
     </style>
-                
     """, unsafe_allow_html=True)
 
-    # Header
-    st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
-    st.markdown("Empowering sustainable fashion choices for a greener future!")
-    
     try:
-        # Initialize database if needed
+        # Initialize database
         init_db()
+        
+        # Header
+        st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
+        st.markdown("Empowering sustainable fashion choices for a greener future!")
         
         # Fetch and process data
         df = fetch_designs_from_db()
@@ -597,6 +480,7 @@ def display_sustainability_dashboard(conn):
             st.markdown(f"""
                 **{design['style']} {design['clothing_type']}**
                 - Materials: {design['materials']}
+                - Production Method: {design['production_method']}
                 - Sustainability Score: {design['sustainability_score']:.1f}/100
             """)
             
