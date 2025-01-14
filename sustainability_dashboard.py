@@ -357,6 +357,11 @@ def display_sustainability_dashboard():
     """, unsafe_allow_html=True)
 
     try:
+        
+        # Header
+        st.markdown('<h1>SUSTAINABILITY DASHBOARD</h1>', unsafe_allow_html=True)
+        st.markdown("Empowering sustainable fashion choices for a greener future!")
+        
         # Fetch and process data
         df = fetch_designs_from_db()
         
