@@ -137,9 +137,9 @@ def sidebar_menu():
         if st.button("Sustainable Textile Generator"):
             st.query_params["page"] = "textile_generator"
             st.rerun()
-        if st.button("Sustainability Dashboard"):
-            st.query_params["page"] = "sustainability_dashboard"
-            st.rerun()
+        #if st.button("Sustainability Dashboard"):
+         #   st.query_params["page"] = "sustainability_dashboard"
+          #  st.rerun()
 
 def display_design_studio_wrapper():
     """Wrapper for design studio to handle model loading and database connection"""
@@ -293,7 +293,7 @@ def display_home():
     # Key Features Section
     st.markdown("<h2 style='color: #8B4513; text-align: center; margin: 3rem 0; font-size: 2.5rem;'>Our Revolutionary Features</h2>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("""
@@ -315,9 +315,9 @@ def display_home():
     with col2:
         st.markdown("""
         <div class="feature-card">
-            <h3 class="feature-title">Sustainability Dashboard</h3>
-            <p class="feature-description">Track your environmental impact and sustainability metrics in real-time.</p>
-            <a href="?page=sustainability_dashboard" class="cta-button">View Impact</a>
+            <h3 class="feature-title">Textile Generator</h3>
+            <p class="feature-description">Generate eco-friendly textile patterns and designs using advanced AI technology.</p>
+            <a href="?page=textile_generator" class="cta-button">Generate Patterns</a>
         </div>
         """, unsafe_allow_html=True)
         
@@ -329,14 +329,6 @@ def display_home():
         </div>
         """, unsafe_allow_html=True)
 
-    with col3:
-        st.markdown("""
-        <div class="feature-card">
-            <h3 class="feature-title">Textile Generator</h3>
-            <p class="feature-description">Generate eco-friendly textile patterns and designs using advanced AI technology.</p>
-            <a href="?page=textile_generator" class="cta-button">Generate Patterns</a>
-        </div>
-        """, unsafe_allow_html=True)
 
     # How It Works Section
     st.markdown("<h2 style='color: #8B4513; text-align: center; margin: 3rem 0; font-size: 2.5rem;'>How It Works</h2>", unsafe_allow_html=True)
@@ -376,8 +368,8 @@ def main():
         display_design_studio_wrapper()
     elif page == "fabric_analysis":
         interactive_sustainable_fabric_advisor()
-    elif page == "sustainability_dashboard":
-        display_sustainability_dashboard()
+    #elif page == "sustainability_dashboard":
+     #   display_sustainability_dashboard()
     elif page == "production_optimizer":
         display_sustainable_production_optimizer()
     elif page == "textile_generator":
