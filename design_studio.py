@@ -170,15 +170,17 @@ def load_models():
             model_id,
             torch_dtype=torch.float32,
             safety_checker=None,
-            requires_safety_checking=False
+            requires_safety_checker=False
         )
         
-        # Move to CPU and enable memory optimizations
+        # Move to CPU
         pipe = pipe.to("cpu")
+        
+        # Enable memory optimizations
         pipe.enable_attention_slicing()
         pipe.enable_vae_tiling()
         
-        # Set minimal memory inference steps
+        # Set minimal inference steps
         pipe.scheduler.num_inference_steps = 20
         
         return pipe
@@ -204,20 +206,36 @@ def generate_ai_image(pipe, prompt, progress_bar):
                 "num_images_per_prompt": 1
             }
             
-            # Progress callback
+            # Simplified progress callback to avoid event loop issues
             def callback(step, timestep, latents):
-                progress = int((step / generation_params["num_inference_steps"]) * 100)
-                progress_bar.progress(progress)
+                try:
+                    progress = min(100, int((step / generation_params["num_inference_steps"]) * 100))
+                    progress_bar.progress(progress)
+                except Exception as e:
+                    st.warning(f"Progress update failed: {str(e)}")
             
-            # Generate image with memory optimization
-            image = pipe(
+            # Disable attention slicing and VAE tiling to avoid indexing errors
+            pipe.disable_attention_slicing()
+            pipe.disable_vae_tiling()
+            
+            # Generate image with bounds checking
+            output = pipe(
                 **generation_params,
-                callback=callback,
+                callback=callback if progress_bar else None,  # Skip callback if no progress bar
                 callback_steps=1
-            ).images[0]
+            )
             
+            # Verify output
+            if not output.images or len(output.images) == 0:
+                st.error("No images generated")
+                return None
+                
+            image = output.images[0]
             return image
             
+    except IndexError as e:
+        st.error(f"Index error during image generation: {str(e)}. Check model dimensions and inputs.")
+        return None
     except Exception as e:
         st.error(f"Error generating image: {str(e)}")
         return None
@@ -260,7 +278,7 @@ def remove_all_asterisks(text):
     return text.replace('*', '')
 
 def get_sustainability_recommendations(style, materials, clothing_type, custom_design, base_color):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     As a sustainable fashion expert, provide recommendations to improve the sustainability of the following design:
     
@@ -294,7 +312,7 @@ def get_sustainability_recommendations(style, materials, clothing_type, custom_d
         return "Unable to generate ethical production recommendations at this time."
 
 def calculate_sustainability_score(materials, production_method, packaging):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     Calculate a sustainability score (0-100) for a fashion design with the following characteristics:
     
@@ -326,7 +344,7 @@ def calculate_sustainability_score(materials, production_method, packaging):
         return "Unable to generate ethical production recommendations at this time."
     
 def generate_zero_waste_pattern(clothing_type, base_color):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     Generate a detailed description of a zero-waste pattern for a {clothing_type} in {base_color}. Include:
     
@@ -352,7 +370,7 @@ def generate_zero_waste_pattern(clothing_type, base_color):
         return "Unable to generate ethical production recommendations at this time."
 
 def suggest_eco_friendly_dyes(base_color):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     Suggest eco-friendly dye options for achieving a {base_color} color in sustainable fashion. For each suggestion, provide:
     
@@ -377,7 +395,7 @@ def suggest_eco_friendly_dyes(base_color):
         return "Unable to generate ethical production recommendations at this time."
 
 def estimate_carbon_footprint(materials, production_location, shipping_method):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     Estimate the carbon footprint for a fashion item with the following characteristics:
     
@@ -407,7 +425,7 @@ def estimate_carbon_footprint(materials, production_location, shipping_method):
         return "Unable to generate ethical production recommendations at this time."
 
 def recommend_ethical_production(production_location):
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     prompt = f"""
     Recommend ethical production options for fashion manufacturing in or near {production_location}. For each recommendation, provide:
     
