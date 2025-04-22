@@ -170,24 +170,22 @@ def load_models():
             model_id,
             torch_dtype=torch.float32,
             safety_checker=None,
-            requires_safety_checker=False
+            requires_safety_checking=False
         )
         
-        # Move to CPU
+        # Move to CPU and enable memory optimizations
         pipe = pipe.to("cpu")
-        
-        # Enable memory optimizations
         pipe.enable_attention_slicing()
         pipe.enable_vae_tiling()
         
-        # Set minimal inference steps
+        # Set minimal memory inference steps
         pipe.scheduler.num_inference_steps = 20
         
         return pipe
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
         return None
-
+        
 def generate_ai_image(pipe, prompt, progress_bar):
     """Generate image with optimized memory usage"""
     if pipe is None:
