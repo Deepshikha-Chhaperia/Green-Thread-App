@@ -12,9 +12,7 @@ protobuf==4.25.3
 python-dotenv==1.1.0
 streamlit==1.30.0
 torch==2.2.0
-torchvision==0.16.2
+torchvision>=0.17.0  
 transformers>=4.36.0
 setuptools>=65.5.0
 wheel>=0.40.0
-
-
