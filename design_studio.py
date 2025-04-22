@@ -170,7 +170,7 @@ def load_models():
             model_id,
             torch_dtype=torch.float32,
             safety_checker=None,
-            requires_safety_checking=False
+            requires_safety_checker=False
         )
         
         # Move to CPU and enable memory optimizations
