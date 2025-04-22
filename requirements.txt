@@ -1,6 +1,6 @@
-diffusers==0.14.0
-huggingface-hub==0.14.1
-accelerate==0.20.3
+diffusers==0.25.0
+huggingface-hub>=0.28.1
+accelerate>=0.20.3
 Flask==3.1.0
 gradio==5.25.2
 numpy==1.26.0
@@ -13,7 +13,7 @@ python-dotenv==1.1.0
 streamlit==1.30.0
 torch==2.2.0
 torchvision>=0.17.0
-transformers==4.30.2
+transformers>=4.30.2
 setuptools>=65.5.0
 wheel>=0.40.0
 google-generativeai==0.8.5
