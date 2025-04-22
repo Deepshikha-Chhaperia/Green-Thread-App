@@ -169,7 +169,7 @@ def load_models():
         # Initialize model with minimal memory usage
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float32,
             safety_checker=None,
             requires_safety_checker=False
         )
