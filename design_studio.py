@@ -169,7 +169,7 @@ def load_models():
         # Initialize model with minimal memory usage
         pipe = StableDiffusionPipeline.from_pretrained(
             model_id,
-            torch_dtype=torch.float32,
+            torch_dtype=torch.float16,
             safety_checker=None,
             requires_safety_checker=False
         )
@@ -823,8 +823,7 @@ def display_design_studio():
                 # Convert bytes to PIL Image for display
                 img = Image.open(BytesIO(st.session_state.generated_design))
                 st.image(img,
-                        caption=f"Sustainable {st.session_state.current_base_color} {st.session_state.current_clothing_type} Design",
-                        use_container_width=True)
+                        caption=f"Sustainable {st.session_state.current_base_color} {st.session_state.current_clothing_type} Design")
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
                 return
