@@ -28,5 +28,5 @@ torchvision==0.17.0
 torchvision==0.20.1
 torchvision==0.15.2
 plotly==5.9.0
-~treamlit==1.42.2
-~treamlit==1.44.1
+streamlit==1.42.2
+streamlit==1.44.1
