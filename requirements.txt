@@ -1,7 +1,7 @@
-diffusers>=0.23.0
+diffusers==0.25.0
 accelerate>=0.26.0
 Flask==3.1.0
-gradio==4.15.0  # Downgraded from 4.19.2
+gradio==4.15.0  
 numpy==1.26.4
 pandas==2.0.3
 Pillow==10.0.0
@@ -12,9 +12,9 @@ python-dotenv==1.0.1
 streamlit==1.36.0
 torch==2.0.1
 torchvision>=0.15.2
-transformers>=4.35.0
+transformers==4.35.0
 tokenizers==0.14.1
 setuptools>=65.5.0
 wheel>=0.40.0
 google-generativeai==0.8.2
-huggingface-hub>=0.19.3
+huggingface-hub==0.19.4
