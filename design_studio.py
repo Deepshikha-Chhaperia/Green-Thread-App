@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import uuid
+from PIL import Image
 from datetime import datetime
 from io import BytesIO
 import google.generativeai as genai
@@ -818,9 +819,15 @@ def display_design_studio():
 
         # Display the generated content if it exists
         if st.session_state.generated_design:
-            st.image(st.session_state.generated_design,
-                    caption=f"Sustainable {st.session_state.current_base_color} {st.session_state.current_clothing_type} Design",
-                    use_container_width=True)
+            try:
+                # Convert bytes to PIL Image for display
+                img = Image.open(BytesIO(st.session_state.generated_design))
+                st.image(img,
+                        caption=f"Sustainable {st.session_state.current_base_color} {st.session_state.current_clothing_type} Design",
+                        use_container_width=True)
+            except Exception as e:
+                st.error(f"Error displaying image: {str(e)}")
+                return
 
             # Add minimal spacing before assessment
             st.markdown("""
