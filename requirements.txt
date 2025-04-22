@@ -1,7 +1,7 @@
 diffusers==0.21.0
 accelerate>=0.26.0
 Flask==3.1.0
-gradio==4.19.2
+gradio==4.15.0  # Downgraded from 4.19.2
 numpy==1.26.4
 pandas==2.0.3
 Pillow==10.0.0
@@ -17,3 +17,4 @@ tokenizers==0.14.1
 setuptools>=65.5.0
 wheel>=0.40.0
 google-generativeai==0.8.2
+huggingface-hub==0.17.3  # Added specific version that's compatible with all requirements
