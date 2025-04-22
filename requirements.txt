@@ -17,4 +17,4 @@ tokenizers==0.14.1
 setuptools>=65.5.0
 wheel>=0.40.0
 google-generativeai==0.8.2
-huggingface-hub==0.17.3  # Added specific version that's compatible with all requirements
+huggingface-hub>=0.19.3
