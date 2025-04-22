@@ -6,7 +6,7 @@ pandas==2.0.3
 Pillow==11.2.1
 pip==25.0.1
 plotly==6.0.1
-protobuf==6.30.2
+protobuf==5.29.0
 python-dotenv==1.1.0
 streamlit==1.44.1
 torch==2.6.0
