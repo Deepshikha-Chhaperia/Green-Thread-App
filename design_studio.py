@@ -262,7 +262,8 @@ retry_strategy = retry.Retry(
     predicate=retry.if_exception_type(
         exceptions.ServiceUnavailable,
         exceptions.InternalServerError,
-        exceptions.TooManyRequests
+        exceptions.TooManyRequests,
+        exceptions.ResourceExhausted
     )
 )
 
@@ -286,7 +287,7 @@ def generate_content_with_retry(model, prompt):
         return response
     except exceptions.TooManyRequests as e:
         st.warning(f"Rate limit exceeded: {str(e)}. Retrying after delay...")
-        time.sleep(30)  # Additional delay for rate limit
+        time.sleep(60)  # Additional delay for rate limit
         raise
     except exceptions.GoogleAPICallError as e:
         st.warning(f"API call failed: {str(e)}. Retrying...")
