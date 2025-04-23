@@ -16,6 +16,8 @@ from flask import Flask, jsonify
 from google.api_core import exceptions
 from google.api_core import retry
 import warnings
+import time
+from functools import lru_cache
 warnings.filterwarnings('ignore')
 
 import os
@@ -264,11 +266,28 @@ retry_strategy = retry.Retry(
     )
 )
 
-@retry_strategy
-def generate_content_with_retry(model, prompt):
+# Cache API responses to reduce redundant calls
+@lru_cache(maxsize=100)
+def cached_generate_content(prompt, model_name='gemini-1.5-pro'):
+    model = genai.GenerativeModel(model_name)
     try:
         response = model.generate_content(prompt)
         return response.text
+    except exceptions.GoogleAPICallError as e:
+        if isinstance(e, exceptions.TooManyRequests):
+            st.warning(f"Rate limit hit: {str(e)}. Waiting before retrying...")
+        raise
+
+@retry_strategy
+def generate_content_with_retry(model, prompt):
+    try:
+        # Use cached function to avoid redundant API calls
+        response = cached_generate_content(prompt, model.model_name)
+        return response
+    except exceptions.TooManyRequests as e:
+        st.warning(f"Rate limit exceeded: {str(e)}. Retrying after delay...")
+        time.sleep(30)  # Additional delay for rate limit
+        raise
     except exceptions.GoogleAPICallError as e:
         st.warning(f"API call failed: {str(e)}. Retrying...")
         raise
