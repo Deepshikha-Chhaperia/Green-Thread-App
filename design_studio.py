@@ -256,7 +256,7 @@ def init_session_state():
     
 # Configure retry strategy
 retry_strategy = retry.Retry(
-    initial=30.0,
+    initial=60.0,
     maximum=120.0,
     multiplier=2,
     predicate=retry.if_exception_type(
