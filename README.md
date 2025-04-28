@@ -63,8 +63,11 @@ Green Thread is a suite of four powerful tools, each tackling a piece of the fas
 
 Diagram showing how user inputs flow through AI models, databases, and outputs. 
 ![Editor _ Mermaid Chart-2025-04-28-095929](https://github.com/user-attachments/assets/af6adc7b-bce0-4120-8b04-ef89083fabca)
+
 ![Editor _ Mermaid Chart-2025-04-28-100240](https://github.com/user-attachments/assets/1fb36d42-71ac-4d32-8a55-f0d41ceaac49)
+
 ![Editor _ Mermaid Chart-2025-04-28-101901](https://github.com/user-attachments/assets/2fb32561-3230-496e-83e6-1bcff61dad7f)
+
 ![Editor _ Mermaid Chart-2025-04-28-102025](https://github.com/user-attachments/assets/340b6ab9-78cc-4867-a727-cb19fe3adcb7)
 
 ---
