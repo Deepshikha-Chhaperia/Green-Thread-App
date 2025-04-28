@@ -44,7 +44,9 @@ Try **Green Thread** live at [https://green-thread-app.streamlit.app/](https://g
 <!-- Command: Embed videos as links or GIFs, as GitHub doesn’t support <video> tags. Upload video to YouTube/Vimeo or convert to GIF. -->
 [Watch Green Thread Demo Video](https://www.youtube.com/watch?v=your-video-id) <!-- Replace with your YouTube/Vimeo URL. Upload video to YouTube, copy URL, and paste here. -->
 
-<!-- Command: Use ![Alt Text](https://github.com/user-attachments/assets/your-asset-id) for GIFs. Upload GIF to repo via Issues to get asset URL. -->
+<!-- Command: Use ![Alt Text](https://github.com/user-attachments/assets/your-asset-id) for GIFs. Upload![pic](https://github.com/user-attachments/assets/ace534df-37b0-4353-95de-16e9d4734253)
+ GIF to repo via Issues to get asset URL. -->![pic](https://github.com/user-attachments/assets/09534b6b-ef01-4cac-a5ea-ed1a63e1f556)
+
 ![Design Studio Demo](https://github.com/user-attachments/assets/eb6c3439-fb2c-4229-a92e-5999f1389780) <!-- Replace with your GIF asset URL. -->
 *Generating a minimalist dress with recycled ocean plastic in the Design Studio.*
 
