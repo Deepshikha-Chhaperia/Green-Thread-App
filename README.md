@@ -1,8 +1,6 @@
 # Green Thread: AI-Powered Sustainable Fashion Revolution
 <!-- Command: Use # for largest header (h1). Fewer # means larger text. -->
 
-![Green Thread Banner](https://github.com/user-attachments/assets/eb6c3439-fb2c-4229-a92e-5999f1389780) <!-- Command: Use ![Alt Text](https://github.com/user-attachments/assets/your-asset-id) for images. Upload to repo via Issues or file upload to get asset URL. Replace with your banner PNG. -->
-
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/) [![Streamlit](https://img.shields.io/badge/Streamlit-1.36+-red.svg)](https://streamlit.io/) [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **Green Thread** is an AI-powered web app that’s rewriting the rules of fashion. <!-- Command: Use **text** to bold for emphasis. -->
