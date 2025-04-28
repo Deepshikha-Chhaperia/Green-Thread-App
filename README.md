@@ -57,13 +57,15 @@ Green Thread is a suite of four powerful tools, each tackling a piece of the fas
 - Try Green Thread live at:  
   **[Green Thread App](https://green-thread-app.streamlit.app/)**
 
-- Watch the Green Thread demo video!
-
 ---
 
 ## 📊 Flowchart
 
-Diagram showing how user inputs flow through AI models, databases, and outputs. *(Add your flowchart here if you have one!)*
+Diagram showing how user inputs flow through AI models, databases, and outputs. 
+![Editor _ Mermaid Chart-2025-04-28-095929](https://github.com/user-attachments/assets/af6adc7b-bce0-4120-8b04-ef89083fabca)
+![Editor _ Mermaid Chart-2025-04-28-100240](https://github.com/user-attachments/assets/1fb36d42-71ac-4d32-8a55-f0d41ceaac49)
+![Editor _ Mermaid Chart-2025-04-28-101901](https://github.com/user-attachments/assets/2fb32561-3230-496e-83e6-1bcff61dad7f)
+![Editor _ Mermaid Chart-2025-04-28-102025](https://github.com/user-attachments/assets/340b6ab9-78cc-4867-a727-cb19fe3adcb7)
 
 ---
 
@@ -135,19 +137,19 @@ Open http://localhost:8501 in your browser. Use the navigation to switch between
 - Streamlit Reloading: Run with --server.fileWatcherType none to disable file watcher.
 
 ---
-##🔧 Usage
+## 🔧 Usage
 - Design Studio: Select style, materials, and packaging, then generate a design. View the sustainability score and download the image as PNG.
 - Fabric Advisor: Upload a fabric image (JPG/PNG, <2MB). Explore composition and ask sustainability questions.
 - Production Optimizer: Input factory details (e.g., location: Bangalore, energy: coal). Get recommendations to cut emissions.
 - Textile Generator: Choose a base material (e.g., seaweed), properties (e.g., antibacterial), and goals (e.g., carbon-negative). Get a textile blueprint.
 
 ---
-##🐛 Known Issues
+## 🐛 Known Issues
 - Stable Diffusion: High memory usage on low-RAM systems. Mitigated with attention slicing, but 16GB+ recommended.
 - ResNet50: Limited accuracy on niche fabrics (e.g., mushroom leather). Fine-tuning planned.
 - Gemini API: Occasional 429 errors under heavy load. Caching and retries minimize impact.
 - Streamlit: File watcher reloads in dev mode. Use --server.fileWatcherType none.
 
 ---
-##📝 Contributing
+## 📝 Contributing
 Interested in collaborating? Reach out on LinkedIn to discuss ideas, from AI model tweaks to UX enhancements. Please do not submit pull requests without prior discussion, as this is a personal project.
