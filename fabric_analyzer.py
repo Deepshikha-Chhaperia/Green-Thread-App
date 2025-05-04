@@ -6,6 +6,7 @@ from torchvision.models import resnet50, ResNet50_Weights #dl model for img rec 
 import os
 from dotenv import load_dotenv #securely storing the sensitive info
 import google.generativeai as genai
+import io
 
 # Load environment variables
 load_dotenv()
