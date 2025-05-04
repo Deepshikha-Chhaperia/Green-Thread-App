@@ -268,56 +268,65 @@ def interactive_sustainable_fabric_advisor():
     uploaded_file = st.file_uploader("Choose a fabric image", type=["jpg", "png", "jpeg"])
     
     if uploaded_file:
-        image = Image.open(uploaded_file).convert('RGB')
-        st.image(image, caption="Your Fabric", use_container_width=True)
-        
-        model = load_model()
-        
-        with st.spinner("Analyzing your fabric..."):
-            predictions = analyze_image(model, image)
-            image_description = ", ".join([f"{pred['class']} ({pred['probability']:.2%})" for pred in predictions])
+        try:
+            # Load and convert image
+            image = Image.open(uploaded_file).convert('RGB')
+            
+            # Convert PIL Image to bytes for Streamlit
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+            
+            # Display image (removed use_container_width)
+            st.image(img_byte_arr, caption="Your Fabric")
+            
+            model = load_model()
+            
+            with st.spinner("Analyzing your fabric..."):
+                predictions = analyze_image(model, image)
+                image_description = ", ".join([f"{pred['class']} ({pred['probability']:.2%})" for pred in predictions])
 
-            fabric_analysis = get_fabric_analysis(image_description)
-            st.subheader("Fabric Analysis")
-            st.write(fabric_analysis)
+                fabric_analysis = get_fabric_analysis(image_description)
+                st.subheader("Fabric Analysis")
+                st.write(fabric_analysis)
 
-        # Predefined sustainability questions
-        sustainability_questions = [
-            "How can I reuse this fabric?",
-            "What are some eco-friendly alternatives to this fabric?",
-            "How can I make this fabric more sustainable?",
-            "What are the best practices for caring for this fabric sustainably?",
-            "How can I recycle or upcycle items made from this fabric?",
-            "What is the environmental impact of this fabric?",
-            "How can I reduce water usage when cleaning this fabric?",
-            "Are there any certifications I should look for when buying this type of fabric?",
-            "How can I extend the lifespan of items made from this fabric?",
-            "What are some sustainable dyeing options for this fabric?",
-            "How does the production of this fabric impact local communities?",
-            "What are some innovative sustainable technologies being used with this type of fabric?",
-            "How can I shop more responsibly for this type of fabric?",
-            "What are some common misconceptions about the sustainability of this fabric?",
-            "How can I advocate for more sustainable practices in the production of this fabric?"
-        ]
+            # Predefined sustainability questions
+            sustainability_questions = [
+                "How can I reuse this fabric?",
+                "What are some eco-friendly alternatives to this fabric?",
+                "How can I make this fabric more sustainable?",
+                "What are the best practices for caring for this fabric sustainably?",
+                "How can I recycle or upcycle items made from this fabric?",
+                "What is the environmental impact of this fabric?",
+                "How can I reduce water usage when cleaning this fabric?",
+                "Are there any certifications I should look for when buying this type of fabric?",
+                "How can I extend the lifespan of items made from this fabric?",
+                "What are some sustainable dyeing options for this fabric?",
+                "How does the production of this fabric impact local communities?",
+                "What are some innovative sustainable technologies being used with this type of fabric?",
+                "How can I shop more responsibly for this type of fabric?",
+                "What are some common misconceptions about the sustainability of this fabric?",
+                "How can I advocate for more sustainable practices in the production of this fabric?"
+            ]
 
-        st.subheader("Explore Sustainability Options")
-        selected_question = st.selectbox("Choose a sustainability question:", ["Select a question..."] + sustainability_questions)
+            st.subheader("Explore Sustainability Options")
+            selected_question = st.selectbox("Choose a sustainability question:", ["Select a question..."] + sustainability_questions)
 
-        if selected_question != "Select a question...":
-            with st.spinner("Generating sustainability insights..."):
-                answer = get_sustainability_answer(selected_question, fabric_analysis)
-                st.write(answer)
+            if selected_question != "Select a question...":
+                with st.spinner("Generating sustainability insights..."):
+                    answer = get_sustainability_answer(selected_question, fabric_analysis)
+                    st.write(answer)
 
-        st.subheader("Ask Your Own Question")
-        custom_question = st.text_input("Type your sustainability question here:")
-        if custom_question:
-            with st.spinner("Answering your question..."):
-                custom_answer = get_sustainability_answer(custom_question, fabric_analysis)
-                st.write(custom_answer)
+            st.subheader("Ask Your Own Question")
+            custom_question = st.text_input("Type your sustainability question here:")
+            if custom_question:
+                with st.spinner("Answering your question..."):
+                    custom_answer = get_sustainability_answer(custom_question, fabric_analysis)
+                    st.write(custom_answer)
+                    
+        except Exception as e:
+            st.error(f"Error processing image: {str(e)}")
+            st.write("Please try uploading a different image or check the file format.")
 
 if __name__ == "__main__":
     interactive_sustainable_fabric_advisor()
-
-
-def display_fabric_analysis():
-    return None
