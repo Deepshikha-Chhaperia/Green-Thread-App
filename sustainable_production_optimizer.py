@@ -2,240 +2,139 @@ import streamlit as st
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
+import time
+from google.api_core.exceptions import NotFound, ResourceExhausted
+import logging
+
+# Set up logging to file for private debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),  # Log to a file
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY not found in environment variables.")
+    st.error("Application configuration error. Please contact support.")
+    st.stop()
 
-# Configure Gemini API
 genai.configure(api_key=GEMINI_API_KEY)
 
 def get_sustainable_recommendations(production_details):
+    # Simplified prompt to reduce token usage
     prompt = f"""
-    Based on the following production details for a fashion item:
+    For a fashion item with these production details:
     {production_details}
     
-    Provide comprehensive, location-specific recommendations for improving sustainability in the following areas:
-    1. Energy Usage: Suggest renewable energy alternatives and energy-efficient practices specific to the production location.
-    2. Water Conservation: Recommend water-saving techniques and water treatment methods considering local water scarcity issues.
-    3. Material Sourcing: Propose sustainable alternatives to traditional materials, considering local availability and climate conditions.
-    4. Supply Chain Optimization: Suggest ways to reduce transportation emissions and improve logistics based on the factory location.
-    5. Waste Reduction: Recommend strategies for minimizing waste in the production process, including local recycling and upcycling opportunities.
-    6. Chemical Usage: Suggest eco-friendly alternatives to harmful chemicals used in production, considering local regulations.
-    7. Labor Practices: Provide recommendations for ensuring fair and safe working conditions, taking into account local labor laws and cultural contexts.
-    8. Packaging: Suggest sustainable packaging alternatives and reduction strategies, considering local recycling infrastructure.
-    9. Certifications: Recommend relevant sustainability certifications to pursue, including any region-specific certifications.
-    10. Technology Integration: Propose innovative technologies that can enhance sustainability, considering local technological infrastructure and availability.
-    11. Climate Resilience: Suggest strategies to make the production process more resilient to local climate change impacts.
-    12. Community Engagement: Recommend ways to engage with and benefit the local community through sustainable practices.
+    Provide location-specific sustainability recommendations for:
+    1. **Energy Usage**: Renewable energy and efficiency practices.
+    2. **Water Conservation**: Water-saving and treatment methods.
+    3. **Material Sourcing**: Sustainable materials based on local availability.
+    4. **Supply Chain**: Emission reduction and logistics optimization.
+    5. **Waste Reduction**: Recycling and upcycling strategies.
+    6. **Chemical Usage**: Eco-friendly chemical alternatives.
+    7. **Labor Practices**: Fair and safe working conditions.
+    8. **Packaging**: Sustainable packaging options.
+    9. **Certifications**: Relevant sustainability certifications.
+    10. **Technology**: Innovative tech for sustainability.
+    11. **Climate Resilience**: Strategies for local climate impacts.
+    12. **Community Engagement**: Local community benefits.
 
-    For each area, provide specific, actionable recommendations tailored to the given production details and location.
-    Include potential environmental benefits and, where possible, estimated cost implications of implementing these changes.
-    Highlight the most important and impactful recommendations using **bold text**.
-    Consider local regulations, climate, resources, and cultural factors in your recommendations.
+    Tailor recommendations to the location, regulations, and climate. Highlight **key recommendations** in bold. Include environmental benefits and estimated cost implications where possible. Keep concise and actionable.
     """
 
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(prompt)
-    return response.text
+    model = genai.GenerativeModel('gemini-1.5-flash')  # Use supported model
+    max_retries = 3
+    retry_delay = 5  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            logger.info("Successfully generated sustainability recommendations.")
+            return response.text
+        except NotFound as e:
+            logger.error(f"Model not found error: {e}")
+            st.error("Unable to generate recommendations due to a configuration issue. Please contact support.")
+            return None
+        except ResourceExhausted as e:
+            logger.warning(f"ResourceExhausted error on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error("Max retries reached for ResourceExhausted error.")
+                st.error("Unable to generate recommendations due to a temporary issue. Please try again later or contact support.")
+                return None
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            st.error("An unexpected issue occurred. Please try again later or contact support.")
+            return None
 
 def display_sustainable_production_optimizer():
     st.markdown("""
     <style>
-    /* Set background color to a warm, subtle gradient */
     .stApp {
-        background: linear-gradient(135deg, #FEFEFA 0%, #FFF8DC 100%); 
+        background: linear-gradient(135deg, #FEFEFA 0%, #FFF8DC 100%);
     }
-
-    /* Updated main heading style with 'AI SUSTAINABLE FASHION DESIGN STUDIO' on one line */
     .stApp h1 {
-        color: #8B4513; /* SaddleBrown for main text */
+        color: #8B4513;
         font-family: 'Playfair Display', serif;
         font-size: 3.5rem;
         font-weight: bold;
         text-transform: uppercase;
         letter-spacing: 2px;
         text-align: center;
-        line-height: 1.2;
         margin-bottom: 20px;
     }
-
     .stApp h1 span {
-        color: #DAA520; /* GoldenRod for 'DESIGN STUDIO' */
-        font-family: 'Playfair Display', serif;
+        color: #DAA520;
     }
-                    
-    /* Set main content color to black for better contrast */
-    body, .stApp {
-        color: black;
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-    }
-
-    /* Modern dropdown style with dark gray background and white text */
-    .stSelectbox > div > div {
-        background-color: #333333;
-        border: 1px solid #E0E0E0;
-        border-radius: 4px;
-        color: white;
-    }
-
     .custom-header {
-        color: #8B4513; /* SaddleBrown */
+        color: #8B4513;
         font-size: 2rem;
         font-weight: bold;
         margin-top: 2rem;
         margin-bottom: 1rem;
-        border-bottom: 2px solid #DAA520; /* GoldenRod */
+        border-bottom: 2px solid #DAA520;
         padding-bottom: 5px;
     }
-
-    /* Make "AI Generated Sustainable Design" black */
-    .main .block-container h2 {
-        color: black;
-    }
-
-    .stMarkdown {
-        color: black !important;
-    }
-
-    .stSelectbox > div > div > div {
-        background-color: #333333;
-        color: white;
-    }
-
-    /* Style for dropdown options */
-    .stSelectbox [role="listbox"] {
-        background-color: #333333;
-        color: white;
-    }
-
-    .stSelectbox [role="option"]:hover {
-        background-color: #4a4a4a;
-    }
-
-    /* Ensure text inputs and text areas have black text */
-    .stTextInput > div > div > input,
-    .stTextArea > div > div > textarea {
-        color: black !important;
-        background-color: white;
-        border: 1px solid #E0E0E0;
-        border-radius: 4px;
-    }
-
-    /* Ensure multiselect dropdown text is white on dark gray background */
-    .stMultiSelect div[role="button"] {
-        color: white !important;
-        background-color: #333333;
-        border: 1px solid #E0E0E0;
-        border-radius: 4px;
-    }
-
-    /* Make labels above dropdowns black */
-    .stSelectbox label, .stMultiSelect label {
-        color: black !important;
-    }
-
-    /* Style for custom input fields */
-    .stTextInput input, .stTextArea textarea {
-        color: black !important;
-        background-color: white !important;
-    }
-
-    /* Ensure visibility of all text */
-    .stMarkdown, .stMarkdown p, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label {
-        opacity: 1 !important;
-        color: black !important;
-    }
-
-    /* Fix for custom design text area */
-    .stTextArea textarea {
-        color: black !important;
-        background-color: white !important;
-    }
-
-    /* Ensure all text in the main content area is black */
-    .main .block-container {
-        color: black;
-    }
-
-    /* Updated style for buttons, including download button */
     .stButton>button, .stDownloadButton>button {
         color: white !important;
         background-color: #333333 !important;
-        border: none !important;
-        padding: 10px 24px !important;
-        text-align: center !important;
-        text-decoration: none !important;
-        display: inline-block !important;
-        font-size: 16px !important;
-        margin: 4px 2px !important;
-        cursor: pointer !important;
-        border-radius: 4px !important;
-        transition: opacity 0.3s !important;
+        border-radius: 4px;
+        padding: 10px 24px;
     }
-
-    /* Hover effect for buttons */
     .stButton>button:hover, .stDownloadButton>button:hover {
         opacity: 0.8;
     }
-
-    /* Ensure download button text is white */
-    .stDownloadButton>button {
-        color: white !important;
-    }
-
-    /* Add a subtle golden glow to the page */
-    .stApp::before {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: radial-gradient(circle at center, rgba(218,165,32,0.1) 0%, rgba(218,165,32,0) 70%);
-        pointer-events: none;
-        z-index: -1;
-    }
-    /* Make specific elements black */
-    .stMarkdown, .stMarkdown p, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label {
-        color: black !important;
-    }
-
-    /* Ensure file uploader text is black */
-    .stFileUploader label {
-        color: black !important;
-    }
-
-    /* Make subheaders black */
-    .stApp h2, .stApp h3 {
-        color: black !important;
-    }
-
-    /* Ensure dropdown text is black when not focused */
-    .stSelectbox > div > div {
-        color: black;
-    }
-
-    /* Keep dropdown options white on dark background when expanded */
-    .stSelectbox [role="listbox"] {
+    .stSelectbox > div > div, .stMultiSelect div[role="button"] {
         background-color: #333333;
         color: white;
+        border: 1px solid #E0E0E0;
+        border-radius: 4px;
     }
-
-    /* Ensure custom question input text is black */
-    .stTextInput input {
+    .stTextInput input, .stTextArea textarea {
         color: black !important;
+        background-color: white !important;
+        border: 1px solid #E0E0E0;
+        border-radius: 4px;
     }
-    /* Ensure all labels, including slider labels, are black */
-    .stSlider label, .stSlider .stMarkdown p {
+    .stMarkdown, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label, .stSlider label {
         color: black !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<h1>SUSTAINABLE <span> PRODUCTION OPTIMIZER </span></h1>', unsafe_allow_html=True)
+    st.markdown('<h1>SUSTAINABLE <span>PRODUCTION OPTIMIZER</span></h1>', unsafe_allow_html=True)
     st.markdown('Optimize your fashion production with tailored sustainability tips—our tool analyzes everything from energy use to community engagement for a greener process!')
-    st.write("Optimize your fashion production for sustainability by providing details about your current processes")
+    st.write("Provide details about your current processes to get sustainability recommendations.")
 
     # Production Location
     location = st.text_input("Production Location (City, Country)", "")
@@ -297,7 +196,7 @@ def display_sustainable_production_optimizer():
 
     # Transportation
     transportation = st.multiselect(
-        "Main Transportation Methods for Materials and Products",
+        "Main Transportation Methods",
         ["Truck", "Ship", "Air Freight", "Rail", "Local suppliers (minimal transportation)", "Electric Vehicles", "Hybrid Vehicles", 
          "Cargo Bikes (for local delivery)", "Consolidated Shipping"]
     )
@@ -338,31 +237,49 @@ def display_sustainable_production_optimizer():
          "Environmental Clean-up Events", "Open Factory Days", "Sponsorship of Local Events", "None"]
     )
 
+    # Cache results to avoid redundant API calls
+    production_details = f"""
+    Production Location: {location}
+    Climate Zone: {climate_zone}
+    Manufacturing Method: {manufacturing_method}
+    Production Scale: {production_scale}
+    Energy Sources: {', '.join(energy_source)}
+    Daily Water Usage: {water_usage} liters
+    Water Sources: {', '.join(water_source)}
+    Main Materials: {', '.join(materials)}
+    Chemicals Used: {', '.join(chemicals)}
+    Waste Management: {', '.join(waste_management)}
+    Transportation Methods: {', '.join(transportation)}
+    Current Certifications: {', '.join(certifications)}
+    Packaging Materials: {', '.join(packaging)}
+    Worker Welfare Initiatives: {', '.join(worker_welfare)}
+    Technology Used: {', '.join(technology_usage)}
+    Community Engagement: {', '.join(community_engagement)}
+    """
+    cache_key = production_details
+    if "recommendations_cache" not in st.session_state:
+        st.session_state.recommendations_cache = {}
+
     if st.button("Get Sustainability Recommendations"):
-        production_details = f"""
-        Production Location: {location}
-        Climate Zone: {climate_zone}
-        Manufacturing Method: {manufacturing_method}
-        Production Scale: {production_scale}
-        Energy Sources: {', '.join(energy_source)}
-        Daily Water Usage: {water_usage} liters
-        Water Sources: {', '.join(water_source)}
-        Main Materials: {', '.join(materials)}
-        Chemicals Used: {', '.join(chemicals)}
-        Waste Management: {', '.join(waste_management)}
-        Transportation Methods: {', '.join(transportation)}
-        Current Certifications: {', '.join(certifications)}
-        Packaging Materials: {', '.join(packaging)}
-        Worker Welfare Initiatives: {', '.join(worker_welfare)}
-        Technology Used: {', '.join(technology_usage)}
-        Community Engagement: {', '.join(community_engagement)}
-        """
+        if not location or not energy_source or not water_source or not materials:
+            st.warning("Please complete all required fields (Location, Energy Sources, Water Sources, Materials).")
+        else:
+            with st.spinner("Analyzing and generating recommendations..."):
+                # Check cache first
+                if cache_key in st.session_state.recommendations_cache:
+                    recommendations = st.session_state.recommendations_cache[cache_key]
+                    logger.info("Retrieved recommendations from cache.")
+                else:
+                    recommendations = get_sustainable_recommendations(production_details)
+                    if recommendations:
+                        st.session_state.recommendations_cache[cache_key] = recommendations
+                        logger.info("Generated new recommendations and cached them.")
 
-        with st.spinner("Analyzing and generating recommendations..."):
-            recommendations = get_sustainable_recommendations(production_details)
-
-        st.subheader("Sustainability Recommendations")
-        st.markdown(recommendations)
+                if recommendations:
+                    st.subheader("Sustainability Recommendations")
+                    st.markdown(recommendations)
+                else:
+                    st.error("Unable to generate recommendations at this time. Please try again later or contact support.")
 
 if __name__ == "__main__":
     display_sustainable_production_optimizer()
