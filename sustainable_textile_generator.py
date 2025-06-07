@@ -100,8 +100,8 @@ def sustainable_textile_generator():
     .stApp h3, .main .block-container h3, div[data-testid="stMarkdownContainer"] h3 {
         color: black !important;
     }
-    /* Target textile description text specifically */
-    div[data-testid="stMarkdownContainer"] > div:not([class]), div[data-testid="stMarkdownContainer"] > div:not([class]) p {
+    /* Ensure subheaders (h2) are black with high specificity */
+    .stApp h2, .main .block-container h2, div[data-testid="stMarkdownContainer"] h2 {
         color: black !important;
     }
     .custom-header {
