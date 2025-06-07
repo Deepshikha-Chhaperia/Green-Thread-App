@@ -96,8 +96,8 @@ def sustainable_textile_generator():
     .stApp h1 span {
         color: #DAA520;
     }
-    /* Ensure text within markdown sections is black */
-    .stMarkdown, .stMarkdown p, .stMarkdown div, div[data-testid="stMarkdownContainer"] p {
+    /* Ensure h3 headings (used for ###) and their content are black */
+    .stApp h3, .main .block-container h3, div[data-testid="stMarkdownContainer"] h3 {
         color: black !important;
     }
     .custom-header {
