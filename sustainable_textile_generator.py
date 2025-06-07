@@ -12,7 +12,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('app.log'),  # Log to a file
-        logging.StreamHandler()  # Optional: log to console for local debugging
+        # Removed StreamHandler to avoid console logs in production
     ]
 )
 logger = logging.getLogger(__name__)
@@ -28,7 +28,6 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 def generate_innovative_textile(base_material, desired_properties, sustainability_goals, additional_requirements, production_method, target_market):
-    # Simplified prompt to reduce token usage
     prompt = f"""Generate a unique, sustainable textile with:
     Base Material: {base_material}
     Desired Properties: {', '.join(desired_properties)}
@@ -55,9 +54,9 @@ def generate_innovative_textile(base_material, desired_properties, sustainabilit
 
     Keep the response concise and innovative."""
 
-    model = genai.GenerativeModel('gemini-1.5-flash')  # Use lighter model if available
+    model = genai.GenerativeModel('gemini-1.5-flash')
     max_retries = 3
-    retry_delay = 5  # seconds
+    retry_delay = 5
 
     for attempt in range(max_retries):
         try:
@@ -69,7 +68,7 @@ def generate_innovative_textile(base_material, desired_properties, sustainabilit
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay *= 2
             else:
                 logger.error("Max retries reached for ResourceExhausted error.")
                 return None
@@ -95,6 +94,14 @@ def sustainable_textile_generator():
     }
     .stApp h1 span {
         color: #DAA520;
+    }
+    /* Ensure h3 headings (used for ###) and their content are black */
+    .stApp h3, .main .block-container h3, div[data-testid="stMarkdownContainer"] h3 {
+        color: black !important;
+    }
+    /* Ensure text within markdown sections is black */
+    .stMarkdown, .stMarkdown p, .stMarkdown div, div[data-testid="stMarkdownContainer"] p {
+        color: black !important;
     }
     .custom-header {
         color: #8B4513;
@@ -135,14 +142,12 @@ def sustainable_textile_generator():
     st.markdown('<h1>SUSTAINABLE <span>TEXTILE GENERATOR</span></h1>', unsafe_allow_html=True)
     st.write("Create an innovative, sustainable textile with enhanced durability and minimal environmental impact!")
 
-    # Options for dropdowns
     base_materials = ["Organic Cotton", "Recycled Polyester", "Organic Hemp", "Bamboo", "Lyocell (Tencel)", "Recycled Nylon", "Organic Linen", "Pineapple Leather", "Mushroom Leather", "Seaweed Fiber", "Other"]
     property_options = ["Water-resistant", "Breathable", "Stretchy", "Wrinkle-resistant", "UV-protective", "Antibacterial", "Moisture-wicking", "Thermal-regulating", "Odor-resistant", "Quick-drying", "Biodegradable", "Hypoallergenic", "Other"]
     sustainability_options = ["Biodegradable", "Low water usage", "Energy-efficient production", "Recyclable", "Zero-waste manufacturing", "Non-toxic dyes", "Carbon-neutral", "Locally sourced", "Closed-loop production", "Regenerative agriculture", "Other"]
     production_methods = ["Weaving", "Knitting", "Non-woven", "3D Printing", "Electrospinning", "Nanotechnology", "Biotechnology", "Other"]
     target_markets = ["Activewear", "Casual wear", "Formal wear", "Outdoor gear", "Medical textiles", "Industrial use", "Home furnishings", "Other"]
 
-    # Input fields
     base_material = st.selectbox("Select Base Material:", base_materials)
     if base_material == "Other":
         base_material = st.text_input("Specify the base material:")
@@ -167,7 +172,6 @@ def sustainable_textile_generator():
 
     additional_requirements = st.text_area("Additional requirements or challenges:")
 
-    # Cache results to avoid redundant API calls
     cache_key = f"{base_material}_{'_'.join(sorted(desired_properties))}_{'_'.join(sorted(sustainability_goals))}_{additional_requirements}_{production_method}_{target_market}"
     if "textile_result" not in st.session_state:
         st.session_state.textile_result = {}
@@ -177,7 +181,6 @@ def sustainable_textile_generator():
             st.warning("Please complete all required fields.")
         else:
             with st.spinner("Generating your innovative, sustainable textile..."):
-                # Check cache first
                 if cache_key in st.session_state.textile_result:
                     textile_description = st.session_state.textile_result[cache_key]
                     logger.info("Retrieved result from cache.")
