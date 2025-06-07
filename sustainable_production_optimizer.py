@@ -27,7 +27,6 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 def get_sustainable_recommendations(production_details):
-    # Simplified prompt to reduce token usage
     prompt = f"""
     For a fashion item with these production details:
     {production_details}
@@ -49,9 +48,9 @@ def get_sustainable_recommendations(production_details):
     Tailor recommendations to the location, regulations, and climate. Highlight **key recommendations** in bold. Include environmental benefits and estimated cost implications where possible. Keep concise and actionable.
     """
 
-    model = genai.GenerativeModel('gemini-1.5-flash')  # Use supported model
+    model = genai.GenerativeModel('gemini-1.5-flash')
     max_retries = 3
-    retry_delay = 5  # seconds
+    retry_delay = 5
 
     for attempt in range(max_retries):
         try:
@@ -67,7 +66,7 @@ def get_sustainable_recommendations(production_details):
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay *= 2
             else:
                 logger.error("Max retries reached for ResourceExhausted error.")
                 st.error("Unable to generate recommendations due to a temporary issue. Please try again later or contact support.")
@@ -96,8 +95,8 @@ def display_sustainable_production_optimizer():
     .stApp h1 span {
         color: #DAA520;
     }
-    /* Ensure subheaders (h2) are black */
-    .stApp h2, .main .block-container h2 {
+    /* Ensure subheaders (h2) are black with high specificity */
+    .stApp h2, .main .block-container h2, div[data-testid="stMarkdownContainer"] h2 {
         color: black !important;
     }
     .custom-header {
@@ -133,11 +132,12 @@ def display_sustainable_production_optimizer():
     .stMarkdown, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label, .stSlider label {
         color: black !important;
     }
-    /* Style slider tick marks and labels to be black */
-    .stSlider .stTicks, .stSlider .stTicks div, .stSlider .stTicks span {
+    /* Style slider tick marks and labels to be black with high specificity */
+    .stSlider [data-testid="stTickBar"] div, .stSlider [data-testid="stTickBar"] span {
         color: black !important;
+        fill: black !important;
     }
-    .stSlider .stTicks {
+    .stSlider [data-testid="stTickBar"] {
         background-color: transparent !important;
     }
     </style>
@@ -276,7 +276,6 @@ def display_sustainable_production_optimizer():
             st.warning("Please complete all required fields (Location, Energy Sources, Water Sources, Materials).")
         else:
             with st.spinner("Analyzing and generating recommendations..."):
-                # Check cache first
                 if cache_key in st.session_state.recommendations_cache:
                     recommendations = st.session_state.recommendations_cache[cache_key]
                     logger.info("Retrieved recommendations from cache.")
