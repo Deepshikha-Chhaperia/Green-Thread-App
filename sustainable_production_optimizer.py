@@ -96,6 +96,10 @@ def display_sustainable_production_optimizer():
     .stApp h1 span {
         color: #DAA520;
     }
+    /* Ensure subheaders (h2) are black */
+    .stApp h2, .main .block-container h2 {
+        color: black !important;
+    }
     .custom-header {
         color: #8B4513;
         font-size: 2rem;
@@ -128,6 +132,13 @@ def display_sustainable_production_optimizer():
     }
     .stMarkdown, .stTextInput label, .stTextArea label, .stSelectbox label, .stMultiSelect label, .stSlider label {
         color: black !important;
+    }
+    /* Style slider tick marks and labels to be black */
+    .stSlider .stTicks, .stSlider .stTicks div, .stSlider .stTicks span {
+        color: black !important;
+    }
+    .stSlider .stTicks {
+        background-color: transparent !important;
     }
     </style>
     """, unsafe_allow_html=True)
