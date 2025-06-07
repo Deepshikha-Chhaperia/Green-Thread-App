@@ -286,7 +286,6 @@ def display_sustainable_production_optimizer():
                         logger.info("Generated new recommendations and cached them.")
 
                 if recommendations:
-                    st.subheader("Sustainability Recommendations")
                     st.markdown(recommendations)
                 else:
                     st.error("Unable to generate recommendations at this time. Please try again later or contact support.")
