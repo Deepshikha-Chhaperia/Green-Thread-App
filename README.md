@@ -155,4 +155,4 @@ Open http://localhost:8501 in your browser. Use the navigation to switch between
 
 ---
 ## 📝 Contributing
-Interested in collaborating? Reach out on LinkedIn to discuss ideas, from AI model tweaks to UX enhancements. Please do not submit pull requests without prior discussion, as this is a personal project.
+Interested in collaborating? Reach out on LinkedIn to discuss ideas, from AI model tweaks to UX enhancements. 
