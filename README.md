@@ -57,6 +57,9 @@ Green Thread is a suite of four powerful tools, each tackling a piece of the fas
 - Try Green Thread live at:  
   **[Green Thread App](https://green-thread-app.streamlit.app/)**
 
+
+https://github.com/user-attachments/assets/e07ec1b8-6180-4c5e-a42e-cb737dba6445
+
 ---
 
 ## 📊 Flowchart
