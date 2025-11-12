@@ -1,0 +1,20 @@
+diffusers==0.25.0
+accelerate==0.27.0
+Flask==3.1.0
+gradio==4.15.0
+numpy==1.26.4
+pandas==2.0.3
+Pillow==10.0.0
+pip==25.0.1
+plotly==6.0.1
+protobuf==4.25.3
+python-dotenv==1.0.1
+streamlit==1.36.0
+torch==2.0.1
+torchvision>=0.15.2
+transformers==4.36.2  # Updated to match other packages
+tokenizers==0.15.0   # Updated to match transformers
+setuptools>=65.5.0
+wheel>=0.40.0
+google-generativeai==0.8.2
+huggingface-hub==0.20.3  # Updated to match other packages

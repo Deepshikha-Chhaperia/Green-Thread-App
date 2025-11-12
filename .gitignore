@@ -1,0 +1,12 @@
+# Ignore all files
+*
+
+# Exclude the zip file and .gitignore itself
+!*.zip
+!.gitignore
+
+# Ignore specific directories
+/venv/
+/node_modules/
+/_pycache_/
+/zbar/
